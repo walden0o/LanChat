@@ -586,8 +586,10 @@ button { cursor: pointer; font-family: inherit; }
 }
 .msg-row:hover .recall-btn { opacity: 1; }
 .recall-btn:hover { color: #e74c3c; }
-.bubble.revoked {
-  background: #eef1f4 !important;
+/* 撤回占位：无论自己/他人都要压住 .msg-row.mine 的白字蓝底规则 */
+.bubble.revoked,
+.msg-row.mine .bubble.revoked {
+  background: #eef1f4;
   color: #98a6b3;
   font-style: italic;
   font-size: 12px;
