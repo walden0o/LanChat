@@ -23,6 +23,7 @@ export const state = reactive({
   onlineIds: new Set(),      // 在线用户 id 集合
   currentKey: 'group',       // 当前会话：'group' 或 'u:<id>'
   messages: { group: [] },   // 会话 key -> 消息数组
+  lastMsg: {},               // 会话 key -> 最后一条消息（列表预览用）
   loadedKeys: new Set(),     // 已拉取过历史的会话
   unread: {},                // 会话 key -> 未读数
   typing: {},                // 会话 key -> 正在输入的昵称
@@ -30,6 +31,40 @@ export const state = reactive({
   kickReason: '',
   uploading: false,
 })
+
+/** 头像配色：同一用户 id 恒定取同一颜色。 */
+const AVATAR_PALETTE = [
+  '#12b7f5', '#ff7a59', '#8a7cff', '#35b26f',
+  '#e8a13c', '#e05a9b', '#4f8ff7', '#26b8b0',
+]
+export function avatarColor(id) {
+  return AVATAR_PALETTE[Math.abs(Number(id) || 0) % AVATAR_PALETTE.length]
+}
+
+/** 会话列表里的一条消息预览文案。 */
+function previewText(m, withSender = false) {
+  if (!m) return ''
+  if (m.revoked) return `${m.senderNickname} 撤回了一条消息`
+  let body
+  if (m.type === 'file') {
+    const mime = m.content?.mime || ''
+    body = /^image\//.test(mime)
+      ? '[图片]'
+      : /^video\//.test(mime)
+        ? '[视频]'
+        : `[文件] ${m.content?.name || ''}`
+  } else {
+    body = String(m.content).replace(/\s+/g, ' ').slice(0, 40)
+  }
+  return withSender ? `${m.senderNickname}: ${body}` : body
+}
+
+/** 会话列表时间：今天显示时分，否则显示月-日。 */
+function convTime(m) {
+  if (!m?.createdAt) return ''
+  const today = new Date().toLocaleDateString('sv')
+  return m.createdAt.slice(0, 10) === today ? m.createdAt.slice(11, 16) : m.createdAt.slice(5, 10)
+}
 
 /** 会话 key 规则：群聊 'group'，私聊 'u:<对方id>'。 */
 export function convKeyOf(msg) {
@@ -48,19 +83,39 @@ export const currentTitle = computed(() => {
   return state.contacts.find((c) => c.id === peerId)?.nickname || '私聊'
 })
 
-/** 侧边栏会话列表：群聊置顶，其余联系人按在线优先排序。 */
+/** 侧边栏会话列表：群聊置顶，其余联系人按最新消息时间倒序。 */
 export const conversationList = computed(() => {
+  const groupMsg = state.lastMsg.group
   const peers = state.contacts
     .filter((c) => c.id !== state.user?.id)
-    .map((c) => ({
-      key: `u:${c.id}`,
-      name: c.nickname,
-      online: state.onlineIds.has(c.id),
-      unread: state.unread[`u:${c.id}`] || 0,
-    }))
-    .sort((a, b) => Number(b.online) - Number(a.online) || a.name.localeCompare(b.name))
+    .map((c) => {
+      const key = `u:${c.id}`
+      const lm = state.lastMsg[key]
+      return {
+        key,
+        name: c.nickname,
+        online: state.onlineIds.has(c.id),
+        unread: state.unread[key] || 0,
+        preview: previewText(lm),
+        time: convTime(lm),
+        lastId: lm?.id || 0,
+        color: avatarColor(c.id),
+      }
+    })
+    .sort(
+      (a, b) =>
+        b.lastId - a.lastId || Number(b.online) - Number(a.online) || a.name.localeCompare(b.name)
+    )
   return [
-    { key: 'group', name: '群聊', online: true, unread: state.unread.group || 0 },
+    {
+      key: 'group',
+      name: '群聊',
+      online: true,
+      unread: state.unread.group || 0,
+      preview: previewText(groupMsg, true),
+      time: convTime(groupMsg),
+      color: '#2f80ed',
+    },
     ...peers,
   ]
 })
@@ -97,6 +152,7 @@ function connectSocket() {
     const key = convKeyOf(msg)
     if (!state.messages[key]) state.messages[key] = []
     state.messages[key].push(msg)
+    state.lastMsg[key] = msg
     if (key !== state.currentKey && msg.senderId !== state.user.id) {
       state.unread[key] = (state.unread[key] || 0) + 1
     }
@@ -136,6 +192,7 @@ function loadHistory(key) {
   state.loadedKeys.add(key)
   const done = (rows) => {
     state.messages[key] = rows
+    if (rows.length) state.lastMsg[key] = rows[rows.length - 1]
   }
   if (key === 'group') {
     state.socket.emit('history:group', { limit: 200 }, done)
@@ -256,6 +313,7 @@ export function logout(reason = '') {
     onlineIds: new Set(),
     currentKey: 'group',
     messages: { group: [] },
+    lastMsg: {},
     loadedKeys: new Set(),
     unread: {},
     typing: {},

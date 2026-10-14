@@ -3,20 +3,20 @@
     <!-- 左侧：个人信息 + 会话列表 -->
     <aside class="sidebar">
       <div class="me">
-        <div class="avatar">{{ avatarChar }}</div>
+        <div class="avatar" :style="{ background: avatarColor(state.user.id) }">{{ avatarChar }}</div>
         <div class="me-info">
           <div class="me-name">
             {{ state.user.nickname }}
             <span v-if="state.user.isAdmin" class="badge">管理员</span>
           </div>
           <div class="me-status" :class="{ offline: !state.connected }">
-            {{ state.connected ? '已连接' : '连接中…' }}
+            <i class="status-dot"></i>{{ state.connected ? '在线' : '连接中…' }}
           </div>
         </div>
         <button v-if="state.user.isAdmin" class="icon-btn" title="用户管理" @click="showAdmin = true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="3" />
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
           </svg>
         </button>
         <button class="icon-btn" title="退出登录" @click="logout()">
@@ -34,9 +34,20 @@
           :class="{ active: c.key === state.currentKey }"
           @click="selectConversation(c.key)"
         >
-          <span class="conv-dot" :class="{ on: c.online }"></span>
-          <span class="conv-name">{{ c.name }}</span>
-          <span v-if="c.unread" class="conv-unread">{{ c.unread > 99 ? '99+' : c.unread }}</span>
+          <div class="conv-avatar" :style="{ background: c.color }">
+            {{ c.name.slice(0, 1).toUpperCase() }}
+            <i class="conv-dot" :class="{ on: c.online }"></i>
+          </div>
+          <div class="conv-main">
+            <div class="conv-top">
+              <span class="conv-name">{{ c.name }}</span>
+              <span class="conv-time">{{ c.time }}</span>
+            </div>
+            <div class="conv-bottom">
+              <span class="conv-preview">{{ c.preview || '暂无消息' }}</span>
+              <span v-if="c.unread" class="conv-unread">{{ c.unread > 99 ? '99+' : c.unread }}</span>
+            </div>
+          </div>
         </li>
       </ul>
     </aside>
@@ -44,8 +55,11 @@
     <!-- 右侧：消息区 + 输入区 -->
     <main class="main">
       <header class="chat-header">
-        <span class="chat-title">{{ currentTitle }}</span>
-        <span v-if="typingText" class="typing-hint">{{ typingText }}</span>
+        <div class="chat-head-main">
+          <span class="chat-title">{{ currentTitle }}</span>
+          <span class="chat-sub">{{ headerSub }}</span>
+          <span v-if="typingText" class="typing-hint">{{ typingText }}</span>
+        </div>
         <!-- 全局消息搜索 -->
         <div class="search-box">
           <input
@@ -69,74 +83,84 @@
         </div>
       </header>
 
+      <div v-if="!state.connected" class="conn-banner">连接已断开，正在自动重连…</div>
+
       <div ref="msgBox" class="messages" @scroll="onScroll">
-        <div
-          v-for="m in currentMessages"
-          :key="m.id"
-          class="msg-row"
-          :class="{ mine: m.senderId === state.user.id }"
-        >
-          <div class="msg-meta">
-            {{ m.senderNickname }} · {{ formatTime(m.createdAt) }}
-            <button
-              v-if="canRecall(m)"
-              class="recall-btn"
-              title="撤回"
-              @click="onRecall(m)"
-            >撤回</button>
-          </div>
-          <div v-if="m.revoked" class="bubble revoked">{{ recallText(m) }}</div>
-          <template v-else>
-          <div v-if="m.type === 'text'" class="bubble">{{ m.content }}</div>
-          <template v-else>
-            <!-- 图片/视频内联预览，其余文件显示下载卡片 -->
-            <img
-              v-if="isImage(m.content)"
-              class="msg-img"
-              :src="mediaUrl(m.content)"
-              :alt="m.content.name"
-              @click="previewUrl = mediaUrl(m.content)"
-            />
-            <video
-              v-else-if="isVideo(m.content)"
-              class="msg-video"
-              :src="mediaUrl(m.content)"
-              controls
-              preload="metadata"
-            ></video>
-            <div
-              v-else
-              class="bubble file-bubble"
-              @click="isText(m.content) ? openTextPreview(m.content) : downloadFile(m.content.fileId, m.content.name)"
-            >
-              <span class="file-icon">{{ isText(m.content) ? '📝' : '📄' }}</span>
-              <span class="file-info">
-                <span class="file-name">{{ m.content.name }}</span>
-                <span class="file-size">
-                  {{ formatSize(m.content.size) }} · {{ isText(m.content) ? '点击预览' : '点击下载' }}
-                </span>
-              </span>
-            </div>
-            <div v-if="isImage(m.content) || isVideo(m.content)" class="media-caption">
-              {{ m.content.name }} · {{ formatSize(m.content.size) }} ·
-              <a class="media-dl" @click="downloadFile(m.content.fileId, m.content.name)">下载</a>
-            </div>
-          </template>
-          </template>
-          <!-- 私聊已读回执：只标在自己发出的最后一条消息上 -->
-          <div
-            v-if="isPrivate && m.senderId === state.user.id && m.id === lastOwnId"
-            class="read-mark"
-            :class="{ read: isRead(m) }"
-          >
-            {{ isRead(m) ? '已读' : '未读' }}
-          </div>
+        <div v-if="!currentMessages.length" class="msg-empty">
+          <div class="msg-empty-icon">💬</div>
+          <p>暂无消息，来聊第一句吧</p>
         </div>
-        <div v-if="!currentMessages.length" class="msg-empty">暂无消息，来聊第一句吧</div>
+        <template v-for="(m, i) in currentMessages" :key="m.id">
+          <!-- 按天分日期分隔条 -->
+          <div v-if="showDate(i)" class="date-sep"><span>{{ dateLabel(m.createdAt) }}</span></div>
+          <div class="msg-row" :class="{ mine: m.senderId === state.user.id }">
+            <div class="msg-avatar" :style="{ background: avatarColor(m.senderId) }">
+              {{ (m.senderNickname || '?').slice(0, 1).toUpperCase() }}
+            </div>
+            <div class="msg-body">
+              <div class="msg-meta">
+                {{ m.senderNickname }} · {{ formatTime(m.createdAt) }}
+                <button
+                  v-if="canRecall(m)"
+                  class="recall-btn"
+                  title="撤回"
+                  @click="onRecall(m)"
+                >撤回</button>
+              </div>
+              <div v-if="m.revoked" class="bubble revoked">{{ recallText(m) }}</div>
+              <template v-else>
+                <div v-if="m.type === 'text'" class="bubble">{{ m.content }}</div>
+                <template v-else>
+                  <!-- 图片/视频内联预览，其余文件显示下载卡片 -->
+                  <img
+                    v-if="isImage(m.content)"
+                    class="msg-img"
+                    :src="mediaUrl(m.content)"
+                    :alt="m.content.name"
+                    @click="previewUrl = mediaUrl(m.content)"
+                  />
+                  <video
+                    v-else-if="isVideo(m.content)"
+                    class="msg-video"
+                    :src="mediaUrl(m.content)"
+                    controls
+                    preload="metadata"
+                  ></video>
+                  <div
+                    v-else
+                    class="bubble file-bubble"
+                    @click="isText(m.content) ? openTextPreview(m.content) : downloadFile(m.content.fileId, m.content.name)"
+                  >
+                    <span class="file-icon">{{ isText(m.content) ? '📝' : '📄' }}</span>
+                    <span class="file-info">
+                      <span class="file-name">{{ m.content.name }}</span>
+                      <span class="file-size">
+                        {{ formatSize(m.content.size) }} · {{ isText(m.content) ? '点击预览' : '点击下载' }}
+                      </span>
+                    </span>
+                  </div>
+                  <div v-if="isImage(m.content) || isVideo(m.content)" class="media-caption">
+                    {{ m.content.name }} · {{ formatSize(m.content.size) }} ·
+                    <a class="media-dl" @click="downloadFile(m.content.fileId, m.content.name)">下载</a>
+                  </div>
+                </template>
+              </template>
+              <!-- 私聊已读回执：只标在自己发出的最后一条消息上 -->
+              <div
+                v-if="isPrivate && m.senderId === state.user.id && m.id === lastOwnId"
+                class="read-mark"
+                :class="{ read: isRead(m) }"
+              >
+                {{ isRead(m) ? '已读' : '未读' }}
+              </div>
+            </div>
+          </div>
+        </template>
       </div>
 
       <footer class="input-area">
         <!-- 表情选择面板 -->
+        <div v-if="showEmoji" class="emoji-mask" @click="showEmoji = false"></div>
         <div v-if="showEmoji" class="emoji-panel">
           <button
             v-for="e in EMOJIS"
@@ -167,7 +191,13 @@
           @keydown.enter.exact.prevent="send"
           @input="sendTyping"
         ></textarea>
-        <button class="btn-primary send-btn" :disabled="!draft.trim()" @click="send">发送</button>
+        <button class="send-btn" :disabled="!draft.trim()" @click="send">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13" />
+            <polygon points="22 2 15 22 11 13 2 9 22 2" />
+          </svg>
+          发送
+        </button>
       </footer>
     </main>
 
@@ -209,6 +239,7 @@ import {
   recallMessage,
   canRecall,
   requestNotifyPermission,
+  avatarColor,
 } from '../store.js'
 import { api, downloadFile } from '../api.js'
 import AdminPanel from '../components/AdminPanel.vue'
@@ -234,6 +265,13 @@ const typingText = ref('')
 
 const avatarChar = (state.user?.nickname || '?').slice(0, 1).toUpperCase()
 const previewUrl = ref('')
+
+// 头部副标题：群聊显示在线人数，私聊显示对方在线状态
+const headerSub = computed(() => {
+  if (state.currentKey === 'group') return `${state.onlineIds.size} 人在线`
+  const peerId = Number(state.currentKey.slice(2))
+  return state.onlineIds.has(peerId) ? '在线' : '离线'
+})
 
 // <img>/<video> 无法带 Authorization 头，通过 ?token= 传递凭证
 const mediaUrl = (c) => `/api/files/${c.fileId}?token=${encodeURIComponent(state.token)}`
@@ -279,6 +317,7 @@ async function send() {
   const text = draft.value.trim()
   if (!text) return
   draft.value = ''
+  showEmoji.value = false
   try {
     await sendText(text)
   } catch (e) {
@@ -320,8 +359,24 @@ watch(
   }
 )
 
+// ---------- 日期分隔 ----------
+function showDate(i) {
+  const arr = currentMessages.value
+  if (i === 0) return true
+  return arr[i].createdAt.slice(0, 10) !== arr[i - 1].createdAt.slice(0, 10)
+}
+function dateLabel(s) {
+  const day = s.slice(0, 10)
+  const today = new Date().toLocaleDateString('sv')
+  const yesterday = new Date(Date.now() - 864e5).toLocaleDateString('sv')
+  if (day === today) return '今天'
+  if (day === yesterday) return '昨天'
+  return day
+}
 function formatTime(s) {
-  return s ? s.slice(5, 16) : ''
+  if (!s) return ''
+  const today = new Date().toLocaleDateString('sv')
+  return s.slice(0, 10) === today ? s.slice(11, 16) : s.slice(5, 16)
 }
 
 // ---------- 撤回 ----------
