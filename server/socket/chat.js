@@ -7,6 +7,8 @@
  *   history:group     { limit?: number } → 回调返回群聊历史
  *   history:private   { userId: number, limit?: number } → 回调返回私聊历史
  *   typing            { to: number|null } → 转发"正在输入"提示（不入库）
+ *   message:recall    { id: number } → 撤回自己的消息（2 分钟内）；管理员可撤回任意消息
+ *   read:update       { peerId: number } → 上报"我已读某私聊会话"
  *
  * 事件约定（服务端 → 客户端）：
  *   message:new       完整消息对象（含 sender_nickname）
@@ -14,6 +16,8 @@
  *   presence:join     {id, nickname} 某人上线
  *   presence:leave    {id} 某人下线
  *   typing            { from, to } 某人正在输入
+ *   message:revoked   { id, by, nickname } 某条消息被撤回
+ *   read:update       { peerId, lastReadId } 对方已读我发出的消息至 lastReadId
  *   kicked            当前账号被禁用/删除，需强制登出
  */
 const { stmt } = require('../db');
@@ -28,15 +32,23 @@ const HISTORY_MAX = 500;
  * file 类型的 content 为 JSON 字符串，这里解析成对象。
  */
 function serializeMessage(row) {
+  const revoked = !!row.revoked;
   return {
     id: row.id,
     senderId: row.sender_id,
     senderNickname: row.sender_nickname,
     receiverId: row.receiver_id,
     type: row.type,
-    content: row.type === 'file' ? JSON.parse(row.content) : row.content,
+    // 已撤回的消息内容不下发
+    content: revoked ? null : row.type === 'file' ? JSON.parse(row.content) : row.content,
+    revoked,
     createdAt: row.created_at,
   };
+}
+
+/** 解析 'YYYY-MM-DD HH:MM:SS' 本地时间为毫秒。 */
+function localTimeToMs(s) {
+  return s ? new Date(s.replace(' ', 'T')).getTime() : 0;
 }
 
 /**
@@ -136,6 +148,37 @@ function setupChat(io) {
       } catch (err) {
         ack?.({ error: '发送失败' });
       }
+    });
+
+    socket.on('message:recall', (payload, ack) => {
+      try {
+        const id = Number(payload?.id);
+        const row = stmt.getMessageById.get(id);
+        if (!row) return ack?.({ error: '消息不存在' });
+        const isOwner = row.sender_id === me.id;
+        // 自己发的 2 分钟内可撤回；管理员不受时间限制
+        const inWindow = Date.now() - localTimeToMs(row.created_at) < 2 * 60 * 1000;
+        if (!(isOwner && inWindow) && !me.is_admin) {
+          return ack?.({ error: '超过撤回时限' });
+        }
+        stmt.revokeMessage.run(id);
+        const evt = { id, by: me.id, nickname: me.nickname };
+        if (row.receiver_id === null) io.emit('message:revoked', evt);
+        else io.to(`user:${row.receiver_id}`).to(`user:${me.id}`).emit('message:revoked', evt);
+        ack?.({ ok: true });
+      } catch {
+        ack?.({ error: '撤回失败' });
+      }
+    });
+
+    // 已读上报：记录我读到的最新消息 id，并通知对方（用于对方显示"已读"）
+    socket.on('read:update', (payload) => {
+      const peerId = Number(payload?.peerId);
+      if (!Number.isInteger(peerId) || peerId <= 0 || peerId === me.id) return;
+      const last = stmt.lastPrivateMessageId.get(me.id, peerId, peerId, me.id);
+      const lastReadId = last?.id || 0;
+      if (lastReadId > 0) stmt.upsertRead.run(me.id, `u:${peerId}`, lastReadId);
+      io.to(`user:${peerId}`).emit('read:update', { peerId: me.id, lastReadId });
     });
 
     socket.on('history:group', (payload, cb) => {

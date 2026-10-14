@@ -26,6 +26,7 @@ export const state = reactive({
   loadedKeys: new Set(),     // 已拉取过历史的会话
   unread: {},                // 会话 key -> 未读数
   typing: {},                // 会话 key -> 正在输入的昵称
+  readMarks: {},             // 'u:<peer>' -> 对方已读我消息的最大 id（已读回执）
   kickReason: '',
   uploading: false,
 })
@@ -99,6 +100,25 @@ function connectSocket() {
     if (key !== state.currentKey && msg.senderId !== state.user.id) {
       state.unread[key] = (state.unread[key] || 0) + 1
     }
+    notifyDesktop(msg, key)
+  })
+
+  socket.on('message:revoked', ({ id }) => {
+    // 就地标记撤回，前端渲染"已撤回"占位
+    for (const list of Object.values(state.messages)) {
+      const m = list.find((x) => x.id === id)
+      if (m) {
+        m.revoked = true
+        m.content = null
+        break
+      }
+    }
+  })
+
+  // 对方已读我的私聊消息：记录其读到的最大 id
+  socket.on('read:update', ({ peerId, lastReadId }) => {
+    const key = `u:${peerId}`
+    state.readMarks[key] = Math.max(state.readMarks[key] || 0, lastReadId)
   })
 
   const typingTimers = {}
@@ -133,11 +153,54 @@ async function refreshContacts() {
   }
 }
 
-/** 切换会话：清未读 + 按需拉历史。 */
+/** 切换会话：清未读 + 按需拉历史 + 私聊上报已读。 */
 export function selectConversation(key) {
   state.currentKey = key
   state.unread[key] = 0
   loadHistory(key)
+  if (key.startsWith('u:')) {
+    state.socket?.emit('read:update', { peerId: Number(key.slice(2)) })
+  }
+}
+
+/** 撤回消息（自己 2 分钟内 / 管理员任意）。 */
+export function recallMessage(id) {
+  return new Promise((resolve, reject) => {
+    state.socket.emit('message:recall', { id }, (ack) => {
+      ack?.error ? reject(new Error(ack.error)) : resolve()
+    })
+  })
+}
+
+/** 消息是否仍可撤回：自己发的、未撤回、2 分钟内（管理员不限时）。 */
+export function canRecall(msg) {
+  if (!msg || msg.revoked) return false
+  if (msg.senderId !== state.user?.id && !state.user?.isAdmin) return false
+  if (state.user?.isAdmin) return true
+  return Date.now() - new Date(msg.createdAt.replace(' ', 'T')).getTime() < 2 * 60 * 1000
+}
+
+// ---------- 桌面通知 ----------
+
+/** 页面在后台时用系统通知提醒新消息。 */
+function notifyDesktop(msg, key) {
+  if (!document.hidden || msg.senderId === state.user?.id) return
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return
+  const body =
+    msg.type === 'text' ? msg.content : msg.content?.name ? `[文件] ${msg.content.name}` : '[消息]'
+  const n = new Notification(msg.senderNickname, { body, tag: `lq-${key}` })
+  n.onclick = () => {
+    window.focus()
+    selectConversation(key)
+    n.close()
+  }
+}
+
+/** 请求桌面通知授权（在用户点击交互后调用，避免被浏览器拦截）。 */
+export function requestNotifyPermission() {
+  if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+    Notification.requestPermission()
+  }
 }
 
 /** 发送文本消息。 */
@@ -196,6 +259,7 @@ export function logout(reason = '') {
     loadedKeys: new Set(),
     unread: {},
     typing: {},
+    readMarks: {},
     kickReason: reason,
   })
   localStorage.removeItem('lq_token')

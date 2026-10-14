@@ -15,7 +15,7 @@ const jwt = require('jsonwebtoken');
 const { db, stmt } = require('../db');
 
 /** 上传目录（与 routes/files.js 保持一致）。 */
-const UPLOAD_DIR = path.join(__dirname, '..', '..', 'uploads');
+const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, '..', '..', 'uploads');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'local-qq-dev-secret-change-me';
 const TOKEN_TTL = process.env.TOKEN_TTL || '7d';
@@ -179,6 +179,7 @@ router.delete('/users/:id', requireAuth, requireAdmin, (req, res) => {
   db.transaction(() => {
     stmt.deleteMessagesByUser.run(targetId, targetId);
     stmt.deleteFilesByUser.run(targetId);
+    stmt.deleteReadsByUser.run(targetId);
     stmt.deleteUser.run(targetId);
   })();
   for (const name of storedNames) {
@@ -186,6 +187,68 @@ router.delete('/users/:id', requireAuth, requireAdmin, (req, res) => {
   }
   notifyContactsChanged(req);
   res.json({ ok: true });
+});
+
+// ---------- 消息搜索 ----------
+
+/** 转义 LIKE 通配符，防止用户输入 %/_ 引发全表匹配。 */
+function escapeLike(s) {
+  return s.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
+// 全局搜索"我可见"的消息（群聊 + 自己参与的私聊），最多 50 条
+router.get('/search', requireAuth, (req, res) => {
+  const q = String(req.query.q || '').trim();
+  if (!q) return res.json({ results: [] });
+  const rows = stmt.searchMessages.all(
+    req.user.id,
+    req.user.id,
+    `%${escapeLike(q)}%`,
+    50
+  );
+  res.json({
+    results: rows.map((r) => ({
+      id: r.id,
+      senderId: r.sender_id,
+      senderNickname: r.sender_nickname,
+      receiverId: r.receiver_id,
+      // 截取关键词附近的片段，避免长消息刷屏
+      snippet: makeSnippet(r.content, q),
+      createdAt: r.created_at,
+    })),
+  });
+});
+
+/** 返回关键词前后各 40 字符的片段。 */
+function makeSnippet(content, q) {
+  const i = content.indexOf(q);
+  if (i < 0) return content.slice(0, 80);
+  const start = Math.max(0, i - 40);
+  const end = Math.min(content.length, i + q.length + 40);
+  return (start > 0 ? '…' : '') + content.slice(start, end) + (end < content.length ? '…' : '');
+}
+
+// ---------- 存储统计（管理员）----------
+
+router.get('/stats', requireAuth, requireAdmin, (req, res) => {
+  const dbFile = path.join(__dirname, '..', '..', 'data', 'local-qq.db');
+  let dbBytes = 0;
+  for (const suffix of ['', '-wal', '-shm']) {
+    try {
+      dbBytes += fs.statSync(dbFile + suffix).size;
+    } catch {
+      /* 文件可能不存在 */
+    }
+  }
+  res.json({
+    stats: {
+      messageCount: stmt.countMessages.get().n,
+      fileCount: stmt.fileStats.get().n,
+      fileBytes: stmt.fileStats.get().bytes,
+      dbBytes,
+      byUser: stmt.filesByUser.all(),
+    },
+  });
 });
 
 module.exports = { router, requireAuth, verifyToken };

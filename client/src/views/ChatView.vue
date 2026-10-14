@@ -13,8 +13,18 @@
             {{ state.connected ? '已连接' : '连接中…' }}
           </div>
         </div>
-        <button v-if="state.user.isAdmin" class="icon-btn" title="用户管理" @click="showAdmin = true">⚙</button>
-        <button class="icon-btn" title="退出登录" @click="logout()">⏻</button>
+        <button v-if="state.user.isAdmin" class="icon-btn" title="用户管理" @click="showAdmin = true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+          </svg>
+        </button>
+        <button class="icon-btn" title="退出登录" @click="logout()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2v8" />
+            <path d="M18.4 6.6a9 9 0 1 1-12.8 0" />
+          </svg>
+        </button>
       </div>
 
       <ul class="conv-list">
@@ -36,6 +46,27 @@
       <header class="chat-header">
         <span class="chat-title">{{ currentTitle }}</span>
         <span v-if="typingText" class="typing-hint">{{ typingText }}</span>
+        <!-- 全局消息搜索 -->
+        <div class="search-box">
+          <input
+            v-model="searchQ"
+            class="search-input"
+            placeholder="搜索消息…"
+            @input="onSearch"
+          />
+          <div v-if="searchQ && searchResults" class="search-results">
+            <div v-if="!searchResults.length" class="search-empty">无匹配消息</div>
+            <div
+              v-for="r in searchResults"
+              :key="r.id"
+              class="search-item"
+              @click="jumpToResult(r)"
+            >
+              <span class="search-meta">{{ r.senderNickname }} · {{ r.createdAt.slice(5, 16) }}</span>
+              <span class="search-snippet">{{ r.snippet }}</span>
+            </div>
+          </div>
+        </div>
       </header>
 
       <div ref="msgBox" class="messages" @scroll="onScroll">
@@ -45,7 +76,17 @@
           class="msg-row"
           :class="{ mine: m.senderId === state.user.id }"
         >
-          <div class="msg-meta">{{ m.senderNickname }} · {{ formatTime(m.createdAt) }}</div>
+          <div class="msg-meta">
+            {{ m.senderNickname }} · {{ formatTime(m.createdAt) }}
+            <button
+              v-if="canRecall(m)"
+              class="recall-btn"
+              title="撤回"
+              @click="onRecall(m)"
+            >撤回</button>
+          </div>
+          <div v-if="m.revoked" class="bubble revoked">{{ recallText(m) }}</div>
+          <template v-else>
           <div v-if="m.type === 'text'" class="bubble">{{ m.content }}</div>
           <template v-else>
             <!-- 图片/视频内联预览，其余文件显示下载卡片 -->
@@ -81,14 +122,41 @@
               <a class="media-dl" @click="downloadFile(m.content.fileId, m.content.name)">下载</a>
             </div>
           </template>
+          </template>
+          <!-- 私聊已读回执：只标在自己发出的最后一条消息上 -->
+          <div
+            v-if="isPrivate && m.senderId === state.user.id && m.id === lastOwnId"
+            class="read-mark"
+            :class="{ read: isRead(m) }"
+          >
+            {{ isRead(m) ? '已读' : '未读' }}
+          </div>
         </div>
         <div v-if="!currentMessages.length" class="msg-empty">暂无消息，来聊第一句吧</div>
       </div>
 
       <footer class="input-area">
+        <!-- 表情选择面板 -->
+        <div v-if="showEmoji" class="emoji-panel">
+          <button
+            v-for="e in EMOJIS"
+            :key="e"
+            class="emoji-item"
+            type="button"
+            @click="insertEmoji(e)"
+          >{{ e }}</button>
+        </div>
         <div class="input-toolbar">
           <button class="icon-btn" title="发送文件" :disabled="state.uploading" @click="fileInput.click()">
             {{ state.uploading ? '⏳' : '📎' }}
+          </button>
+          <button class="icon-btn" title="表情" @click="showEmoji = !showEmoji">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+              <line x1="9" y1="9" x2="9.01" y2="9" />
+              <line x1="15" y1="9" x2="15.01" y2="9" />
+            </svg>
           </button>
           <input ref="fileInput" type="file" hidden @change="onPickFile" />
         </div>
@@ -127,7 +195,7 @@
 </template>
 
 <script setup>
-import { ref, watch, nextTick } from 'vue'
+import { ref, watch, nextTick, computed, onMounted } from 'vue'
 import {
   state,
   currentMessages,
@@ -138,12 +206,28 @@ import {
   sendFile,
   sendTyping,
   logout,
+  recallMessage,
+  canRecall,
+  requestNotifyPermission,
 } from '../store.js'
-import { downloadFile } from '../api.js'
+import { api, downloadFile } from '../api.js'
 import AdminPanel from '../components/AdminPanel.vue'
 
 const draft = ref('')
 const showAdmin = ref(false)
+const showEmoji = ref(false)
+
+// 常用表情（纯文本插入，无需后端支持）
+const EMOJIS = [
+  '😀','😁','😂','🤣','😊','😍','😘','😎','🤔','😴',
+  '😭','😡','🥳','🤝','👍','👎','👌','✊','🙏','💪',
+  '🎉','🔥','❤️','💔','✅','❌','⚠️','💡','☕','🍚',
+  '🚀','🐱','🐶','🌹','🌈','☀️','🌧️','⚡','🎁','📌',
+]
+function insertEmoji(e) {
+  draft.value += e
+  showEmoji.value = false
+}
 const msgBox = ref(null)
 const fileInput = ref(null)
 const typingText = ref('')
@@ -239,6 +323,64 @@ watch(
 function formatTime(s) {
   return s ? s.slice(5, 16) : ''
 }
+
+// ---------- 撤回 ----------
+async function onRecall(m) {
+  if (!confirm('确定撤回这条消息？')) return
+  try {
+    await recallMessage(m.id)
+  } catch (e) {
+    alert(e.message)
+  }
+}
+const recallText = (m) => (m.senderId === state.user.id ? '你撤回了一条消息' : `${m.senderNickname} 撤回了一条消息`)
+
+// ---------- 已读回执（仅私聊） ----------
+const isPrivate = computed(() => state.currentKey.startsWith('u:'))
+const lastOwnId = computed(() => {
+  const list = currentMessages.value
+  for (let i = list.length - 1; i >= 0; i--) {
+    if (list[i].senderId === state.user.id) return list[i].id
+  }
+  return 0
+})
+const isRead = (m) => m.id <= (state.readMarks[state.currentKey] || 0)
+
+// ---------- 消息搜索 ----------
+const searchQ = ref('')
+const searchResults = ref(null)
+let searchTimer = null
+function onSearch() {
+  clearTimeout(searchTimer)
+  if (!searchQ.value.trim()) {
+    searchResults.value = null
+    return
+  }
+  searchTimer = setTimeout(async () => {
+    try {
+      const { results } = await api.search(searchQ.value.trim())
+      searchResults.value = results
+    } catch {
+      searchResults.value = []
+    }
+  }, 300)
+}
+/** 点击搜索结果：跳转到对应会话。 */
+function jumpToResult(r) {
+  const key = r.receiverId === null ? 'group' : `u:${r.senderId === state.user.id ? r.receiverId : r.senderId}`
+  selectConversation(key)
+  searchQ.value = ''
+  searchResults.value = null
+}
+
+// 用户首次交互后请求桌面通知授权（浏览器要求交互后才能弹授权框）
+onMounted(() => {
+  const once = () => {
+    requestNotifyPermission()
+    window.removeEventListener('click', once)
+  }
+  window.addEventListener('click', once)
+})
 function formatSize(n) {
   if (n < 1024) return `${n} B`
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`

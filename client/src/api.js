@@ -26,6 +26,8 @@ export const api = {
     request('/login', { method: 'POST', body: { username, password } }),
   contacts: () => request('/contacts'),
   users: () => request('/users'),
+  search: (q) => request(`/search?q=${encodeURIComponent(q)}`),
+  stats: () => request('/stats'),
   toggleDisabled: (id) => request(`/users/${id}/disable`, { method: 'POST' }),
   toggleAdmin: (id) => request(`/users/${id}/admin`, { method: 'POST' }),
   deleteUser: (id) => request(`/users/${id}`, { method: 'DELETE' }),

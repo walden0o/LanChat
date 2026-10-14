@@ -297,3 +297,69 @@ button { cursor: pointer; font-family: inherit; }
   .sidebar { width: 180px; }
   .msg-row { max-width: 85%; }
 }
+
+/* ---------- 消息搜索 ---------- */
+.search-box { position: relative; margin-left: auto; }
+.search-input {
+  width: 180px; padding: 5px 10px; border: 1px solid #d5dee6; border-radius: 15px;
+  font-size: 12px; outline: none; background: #f4f7fa;
+}
+.search-input:focus { border-color: #4a90d9; background: #fff; }
+.search-results {
+  position: absolute; top: 32px; right: 0; width: 340px; max-height: 400px; overflow-y: auto;
+  background: #fff; border: 1px solid #e0e6ec; border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12); z-index: 30;
+}
+.search-empty { padding: 12px; font-size: 12px; color: #98a6b3; text-align: center; }
+.search-item {
+  display: flex; flex-direction: column; gap: 2px; padding: 8px 12px;
+  cursor: pointer; border-bottom: 1px solid #f0f3f6;
+}
+.search-item:hover { background: #f2f8ff; }
+.search-meta { font-size: 11px; color: #98a6b3; }
+.search-snippet { font-size: 12px; color: #2c3e50; word-break: break-all; }
+
+/* ---------- 撤回 ---------- */
+.recall-btn {
+  border: none; background: none; color: #b0bcc7; font-size: 11px;
+  cursor: pointer; margin-left: 6px; opacity: 0; transition: opacity 0.15s;
+}
+.msg-row:hover .recall-btn { opacity: 1; }
+.recall-btn:hover { color: #e74c3c; }
+.bubble.revoked {
+  background: #eef1f4; color: #98a6b3; font-style: italic; font-size: 12px;
+  cursor: default;
+}
+
+/* ---------- 已读回执 ---------- */
+.read-mark { font-size: 11px; color: #b0bcc7; margin-top: 2px; }
+.read-mark.read { color: #4a90d9; }
+
+/* ---------- 管理面板：标签 + 统计 ---------- */
+.tab-btn {
+  border: none; background: none; padding: 4px 10px; border-radius: 12px;
+  font-size: 12px; color: #7a8a99; cursor: pointer;
+}
+.tab-btn.active { background: #4a90d9; color: #fff; }
+.stats-cards { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+.stat-card {
+  flex: 1; min-width: 110px; background: #f4f7fa; border-radius: 8px;
+  padding: 12px; display: flex; flex-direction: column; align-items: center; gap: 4px;
+}
+.stat-card b { font-size: 18px; color: #2c3e50; }
+.stat-card span { font-size: 12px; color: #7a8a99; }
+
+/* ---------- SVG 图标 & 表情面板 ---------- */
+.input-area { position: relative; }
+.icon-btn svg { width: 16px; height: 16px; display: block; }
+.emoji-panel {
+  position: absolute; bottom: 100%; left: 0; margin-bottom: 6px;
+  display: grid; grid-template-columns: repeat(10, 32px); gap: 2px;
+  background: #fff; border: 1px solid #e0e6ec; border-radius: 10px;
+  padding: 8px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12); z-index: 25;
+}
+.emoji-item {
+  border: none; background: none; font-size: 18px; line-height: 32px;
+  cursor: pointer; border-radius: 6px;
+}
+.emoji-item:hover { background: #f0f6ff; }

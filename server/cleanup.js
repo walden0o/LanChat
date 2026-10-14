@@ -9,7 +9,7 @@ const path = require('path');
 const fs = require('fs');
 const { db, stmt, TTL_DAYS } = require('./db');
 
-const UPLOAD_DIR = path.join(__dirname, '..', 'uploads');
+const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, '..', 'uploads');
 const INTERVAL_MS = 60 * 60 * 1000;
 
 /** 执行一轮清理，返回各表删除条数。 */
