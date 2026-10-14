@@ -3,4 +3,5 @@ client/dist/
 client/node_modules/
 data/
 uploads/
+backups/
 *.log

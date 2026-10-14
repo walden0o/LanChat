@@ -98,6 +98,24 @@ journalctl --user -u local-qq -f    # 查看日志
 
 删除这两个目录即可完全重置（用户需重新注册，首个注册用户重新成为管理员）。
 
+## 数据库备份
+
+```bash
+npm run backup
+```
+
+用 `VACUUM INTO` 生成一致性快照到 `backups/`（WAL 模式下直接 cp 数据库文件不安全），自动保留最近 20 份。恢复：停服务 → 用备份文件替换 `data/local-qq.db` → 重启。
+
+注意：备份只含数据库，**`uploads/` 目录里的文件实体需另行备份**。
+
+定时备份（每天凌晨 3 点）可加 cron：
+
+```bash
+crontab -e
+# 加一行：
+0 3 * * * cd /home/lq016/ws/luoqi/code/tools/local-qq && npm run backup
+```
+
 ## 目录结构
 
 ```
