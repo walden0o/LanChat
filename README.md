@@ -108,13 +108,18 @@ npm run backup
 
 注意：备份只含数据库，**`uploads/` 目录里的文件实体需另行备份**。
 
-定时备份（每天凌晨 3 点）可加 cron：
+定时备份（本机已配置 systemd 定时器，每天 09:00 自动执行）：
 
 ```bash
-crontab -e
-# 加一行：
-0 3 * * * cd /home/lq016/ws/luoqi/code/tools/local-qq && npm run backup
+systemctl --user list-timers                     # 查看下次执行时间
+systemctl --user start local-qq-backup.service   # 手动触发一次
+journalctl --user -u local-qq-backup.service     # 看备份日志
 ```
+
+重新部署到其他机器时，复制 `deploy/local-qq-backup.service` 和
+`deploy/local-qq-backup.timer` 到 `~/.config/systemd/user/`（改模板中的
+`WorkingDirectory`、node 路径），然后 `systemctl --user daemon-reload &&
+systemctl --user enable --now local-qq-backup.timer`。
 
 ## 目录结构
 
@@ -139,8 +144,15 @@ client/             # Vue 3 + Vite 前端
 cd client && node test-e2e.cjs
 ```
 
-会模拟两个用户跑通：注册→登录→群聊→私聊→历史→文件上传/下载→管理员禁用/删除。
-注意：测试会在数据库中残留测试账号，建议在干净数据库上运行或测试后重置。
+会模拟两个用户跑通：注册→登录→群聊→私聊→历史→文件上传/下载→已读回执→管理员禁用/删除。
+
+⚠️ 测试会污染真实数据库（残留测试账号/消息）。推荐起一个独立测试实例：
+
+```bash
+DATA_DIR=/tmp/local-qq-test PORT=3111 node server/index.js &
+BASE=http://localhost:3111 node client/test-e2e.cjs
+# 测完清理：kill %1 && rm -rf /tmp/local-qq-test
+```
 
 新功能验证（撤回/已读回执/搜索/存储统计）：
 

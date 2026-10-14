@@ -1,0 +1,8 @@
+# systemd 用户服务：定时备份的数据库备份任务（被 local-qq-backup.timer 触发）
+[Unit]
+Description=Local QQ 数据库备份
+
+[Service]
+Type=oneshot
+WorkingDirectory=/path/to/local-qq
+ExecStart=/home/lq016/.local/bin/node scripts/backup.cjs
