@@ -188,6 +188,38 @@ button { cursor: pointer; font-family: inherit; }
 .media-dl { color: #12b7f5; cursor: pointer; }
 .media-dl:hover { text-decoration: underline; }
 
+/* 文本预览弹窗 */
+.text-modal { width: min(820px, 94vw); }
+.text-modal-title {
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.text-modal-ops { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.dl-btn {
+  border: 1px solid #12b7f5;
+  color: #12b7f5;
+  background: #fff;
+  border-radius: 4px;
+  padding: 4px 12px;
+  font-size: 13px;
+}
+.dl-btn:hover { background: #eaf8fe; }
+.text-preview {
+  margin: 12px 0 4px;
+  padding: 12px;
+  background: #f7f8fa;
+  border-radius: 6px;
+  font-family: 'JetBrains Mono', Consolas, 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 62vh;
+  overflow-y: auto;
+}
+
 /* 图片灯箱 */
 .lightbox {
   position: fixed;

@@ -18,8 +18,8 @@ const multer = require('multer');
 const { stmt } = require('../db');
 const { requireAuth, verifyToken } = require('./auth');
 
-/** 可安全内联预览的媒体类型；SVG 可执行脚本，必须排除。 */
-const INLINE_RE = /^(image\/(?!svg)|video\/|audio\/)/;
+/** 可安全内联预览的类型；SVG 可执行脚本，必须排除。 */
+const INLINE_RE = /^(image\/(?!svg)|video\/|audio\/|text\/plain)/;
 
 /**
  * 鉴权中间件：优先 Authorization 头，缺失时回退 ?token= 查询参数。
