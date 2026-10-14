@@ -94,6 +94,13 @@ function setupChat(io) {
     set.add(socket.id);
 
     socket.emit('presence:list', onlineList());
+    // 连接即下发已读位置：
+    //   private —— conv_key='u:ME' 的行：每个 peer 读到"与我私聊"的进度
+    //   group   —— conv_key='group' 的行：每个人读到群聊的进度
+    socket.emit('read:marks', {
+      private: stmt.readMarksOfConv.all(`u:${me.id}`),
+      group: stmt.readMarksOfConv.all('group'),
+    });
     if (firstSocket) {
       socket.broadcast.emit('presence:join', { id: me.id, nickname: me.nickname });
     }
@@ -171,8 +178,16 @@ function setupChat(io) {
       }
     });
 
-    // 已读上报：记录我读到的最新消息 id，并通知对方（用于对方显示"已读"）
+    // 已读上报：记录我读到的最新消息 id。
+    // 私聊：{ peerId } → 只推给对方；群聊：{ conv:'group' } → 广播给所有人（算"N人已读"用）
     socket.on('read:update', (payload) => {
+      if (payload?.conv === 'group') {
+        const last = stmt.lastGroupMessageId.get();
+        const lastReadId = last?.id || 0;
+        if (lastReadId > 0) stmt.upsertRead.run(me.id, 'group', lastReadId);
+        io.emit('read:update', { conv: 'group', userId: me.id, lastReadId });
+        return;
+      }
       const peerId = Number(payload?.peerId);
       if (!Number.isInteger(peerId) || peerId <= 0 || peerId === me.id) return;
       const last = stmt.lastPrivateMessageId.get(me.id, peerId, peerId, me.id);

@@ -153,6 +153,14 @@
               >
                 {{ isRead(m) ? '已读' : '未读' }}
               </div>
+              <!-- 群聊：自己每条消息下方显示已读人数 -->
+              <div
+                v-else-if="!isPrivate && m.senderId === state.user.id && !m.revoked && othersCount > 0"
+                class="read-mark"
+                :class="{ read: groupReadCount(m) >= othersCount }"
+              >
+                {{ groupReadCount(m) >= othersCount ? '全部已读' : `${groupReadCount(m)} 人已读` }}
+              </div>
             </div>
           </div>
         </template>
@@ -240,6 +248,8 @@ import {
   canRecall,
   requestNotifyPermission,
   avatarColor,
+  groupReadCount,
+  othersCount,
 } from '../store.js'
 import { api, downloadFile } from '../api.js'
 import AdminPanel from '../components/AdminPanel.vue'

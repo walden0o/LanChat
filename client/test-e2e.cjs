@@ -32,13 +32,18 @@ async function get(p, token) {
 function connect(token) {
   const s = io(BASE, { auth: { token } });
   s.msgs = [];
+  s.readEvents = [];
   s.on('message:new', (m) => s.msgs.push(m));
+  s.on('read:update', (m) => s.readEvents.push(m));
+  s.on('read:marks', (m) => (s.marks = m));
   return new Promise((resolve, reject) => {
     s.on('connect', () => resolve(s));
     s.on('connect_error', reject);
     setTimeout(() => reject(new Error('connect timeout')), 3000);
   });
 }
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const emit = (s, ev, payload) =>
   new Promise((res) => s.emit(ev, payload, res));
@@ -144,7 +149,35 @@ async function main() {
   assert.equal(range.status, 206);
   console.log('✓ 图片内联预览 / ?token= 鉴权 / Range 支持');
 
-  // 9. 管理员：bob 无权访问 /users，alice 可以
+  // 9. 已读回执：私聊上报 → 实时通知 + 重连回拉；群聊已读广播
+  await emit(sa, 'message:send', { to: b.data.user.id, type: 'text', content: '看到没' });
+  await sleep(300);
+  // bob 上报已读他与 alice 的私聊
+  sb.emit('read:update', { peerId: a.data.user.id });
+  await sleep(300);
+  const privRead = sa.readEvents.find((e) => e.peerId === b.data.user.id);
+  assert.ok(privRead && privRead.lastReadId > 0, 'alice 应收到 bob 的已读上报');
+  console.log('✓ 私聊已读上报');
+
+  // alice 重连 → read:marks 回拉历史已读位置
+  sa.disconnect();
+  const sa2 = await connect(a.data.token);
+  await sleep(300);
+  assert.ok(
+    sa2.marks?.private?.some((r) => r.user_id === b.data.user.id && r.last_read_id > 0),
+    '重连后应回拉到 bob 的已读位置'
+  );
+  console.log('✓ 连接回拉已读位置');
+
+  // 群聊已读：bob 打开群聊 → 所有人收到广播（含 alice）
+  sb.emit('read:update', { conv: 'group' });
+  await sleep(300);
+  const grpRead = sa2.readEvents.find((e) => e.conv === 'group' && e.userId === b.data.user.id);
+  assert.ok(grpRead && grpRead.lastReadId > 0, '应收到群聊已读广播');
+  assert.ok(Array.isArray(sa2.marks?.group), 'read:marks 应含 group 字段');
+  console.log('✓ 群聊已读人数');
+
+  // 10. 管理员：bob 无权访问 /users，alice 可以
   assert.equal((await get('/users', b.data.token)).status, 403);
   const users = (await get('/users', a.data.token)).data.users;
   assert.ok(users.length >= 2);
@@ -169,7 +202,7 @@ async function main() {
   assert.equal(del.status, 200);
   console.log('✓ 删除用户');
 
-  sa.disconnect(); sb.disconnect();
+  sa2.disconnect(); sb.disconnect();
   fs.unlinkSync(tmpFile);
   console.log('\n全部通过 ✓');
   process.exit(0);

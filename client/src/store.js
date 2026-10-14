@@ -28,6 +28,7 @@ export const state = reactive({
   unread: {},                // 会话 key -> 未读数
   typing: {},                // 会话 key -> 正在输入的昵称
   readMarks: {},             // 'u:<peer>' -> 对方已读我消息的最大 id（已读回执）
+  groupReads: {},            // userId -> 该用户在群聊已读到的最大消息 id
   kickReason: '',
   uploading: false,
 })
@@ -130,6 +131,7 @@ function connectSocket() {
     state.connected = true
     refreshContacts()
     loadHistory(state.currentKey)
+    emitReadUpdate(state.currentKey) // 重连后补报当前会话的已读位置
   })
   socket.on('disconnect', () => {
     state.connected = false
@@ -155,6 +157,8 @@ function connectSocket() {
     state.lastMsg[key] = msg
     if (key !== state.currentKey && msg.senderId !== state.user.id) {
       state.unread[key] = (state.unread[key] || 0) + 1
+    } else if (key === state.currentKey) {
+      emitReadUpdate(key) // 正在查看该会话：收到即视为已读
     }
     notifyDesktop(msg, key)
   })
@@ -172,9 +176,24 @@ function connectSocket() {
   })
 
   // 对方已读我的私聊消息：记录其读到的最大 id
-  socket.on('read:update', ({ peerId, lastReadId }) => {
+  socket.on('read:update', ({ conv, peerId, userId, lastReadId }) => {
+    if (conv === 'group') {
+      state.groupReads[userId] = Math.max(state.groupReads[userId] || 0, lastReadId)
+      return
+    }
     const key = `u:${peerId}`
     state.readMarks[key] = Math.max(state.readMarks[key] || 0, lastReadId)
+  })
+
+  // 连接时回拉历史已读位置（刷新/重连后已读状态不丢）
+  socket.on('read:marks', ({ private: priv = [], group = [] }) => {
+    for (const r of priv) {
+      const key = `u:${r.user_id}`
+      state.readMarks[key] = Math.max(state.readMarks[key] || 0, r.last_read_id)
+    }
+    for (const r of group) {
+      state.groupReads[r.user_id] = Math.max(state.groupReads[r.user_id] || 0, r.last_read_id)
+    }
   })
 
   const typingTimers = {}
@@ -210,14 +229,19 @@ async function refreshContacts() {
   }
 }
 
-/** 切换会话：清未读 + 按需拉历史 + 私聊上报已读。 */
+/** 向服务端上报"我已读到某会话的最新"。 */
+function emitReadUpdate(key) {
+  if (!state.socket?.connected) return
+  if (key === 'group') state.socket.emit('read:update', { conv: 'group' })
+  else if (key.startsWith('u:')) state.socket.emit('read:update', { peerId: Number(key.slice(2)) })
+}
+
+/** 切换会话：清未读 + 按需拉历史 + 上报已读。 */
 export function selectConversation(key) {
   state.currentKey = key
   state.unread[key] = 0
   loadHistory(key)
-  if (key.startsWith('u:')) {
-    state.socket?.emit('read:update', { peerId: Number(key.slice(2)) })
-  }
+  emitReadUpdate(key)
 }
 
 /** 撤回消息（自己 2 分钟内 / 管理员任意）。 */
@@ -227,6 +251,19 @@ export function recallMessage(id) {
       ack?.error ? reject(new Error(ack.error)) : resolve()
     })
   })
+}
+
+/** 除我之外的联系人总数（群聊"N 人已读"的分母）。 */
+export const othersCount = computed(
+  () => state.contacts.filter((c) => c.id !== state.user?.id).length
+)
+
+/** 群聊消息被多少其他成员读到（已读位置 >= 该消息 id 即算已读）。 */
+export function groupReadCount(msg) {
+  return state.contacts.reduce(
+    (n, c) => n + (c.id !== state.user?.id && (state.groupReads[c.id] || 0) >= msg.id ? 1 : 0),
+    0
+  )
 }
 
 /** 消息是否仍可撤回：自己发的、未撤回、2 分钟内（管理员不限时）。 */
@@ -318,6 +355,7 @@ export function logout(reason = '') {
     unread: {},
     typing: {},
     readMarks: {},
+    groupReads: {},
     kickReason: reason,
   })
   localStorage.removeItem('lq_token')

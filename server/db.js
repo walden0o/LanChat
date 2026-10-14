@@ -157,6 +157,14 @@ const stmt = {
     `SELECT MAX(id) AS id FROM messages
      WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)`
   ),
+  // 群聊当前最新消息 id（群聊已读上报用）
+  lastGroupMessageId: db.prepare(
+    `SELECT MAX(id) AS id FROM messages WHERE receiver_id IS NULL`
+  ),
+  // 某会话中所有人的已读位置：连接时下发，用于"回拉已读"
+  readMarksOfConv: db.prepare(
+    'SELECT user_id, last_read_id FROM user_reads WHERE conv_key = ?'
+  ),
 
   // ---- 消息搜索（LIKE 支持中文子串；仅限"我可见"的消息）----
   searchMessages: db.prepare(
