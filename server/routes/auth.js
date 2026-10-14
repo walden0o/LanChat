@@ -12,7 +12,7 @@ const fs = require('fs');
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { db, stmt } = require('../db');
+const { db, stmt, getStorageSettings } = require('../db');
 
 /** 上传目录（与 routes/files.js 保持一致）。 */
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, '..', '..', 'uploads');
@@ -249,6 +249,39 @@ router.get('/stats', requireAuth, requireAdmin, (req, res) => {
       byUser: stmt.filesByUser.all(),
     },
   });
+});
+
+// ---------- 存储管理：保留时间设置（管理员）----------
+
+// 读取保留时间设置
+router.get('/storage-settings', requireAuth, requireAdmin, (req, res) => {
+  res.json({ settings: getStorageSettings() });
+});
+
+// 修改保留时间（文件/消息独立，1-3650 天），保存后下一轮清理即生效
+router.post('/storage-settings', requireAuth, requireAdmin, (req, res) => {
+  const { fileTtlDays, messageTtlDays } = req.body || {};
+  const apply = (key, v) => {
+    if (v === undefined || v === null || v === '') return; // 未提交的字段不动
+    const n = Number(v);
+    if (!Number.isInteger(n) || n < 1 || n > 3650) {
+      throw new Error('保留天数需为 1-3650 的整数');
+    }
+    stmt.setSetting.run(key, String(n));
+  };
+  try {
+    apply('file_ttl_days', fileTtlDays);
+    apply('message_ttl_days', messageTtlDays);
+  } catch (e) {
+    return res.status(400).json({ error: e.message });
+  }
+  res.json({ settings: getStorageSettings() });
+});
+
+// 手动触发一轮过期清理，返回清理条数
+router.post('/cleanup', requireAuth, requireAdmin, (req, res) => {
+  const { cleanup } = require('../cleanup');
+  res.json({ result: cleanup() });
 });
 
 module.exports = { router, requireAuth, verifyToken };

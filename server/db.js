@@ -9,11 +9,8 @@ const Database = require('better-sqlite3');
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
-/** 数据保留天数（消息与文件），默认 5 天，可用 DATA_TTL_DAYS 覆盖。 */
-const TTL_DAYS = Math.max(1, parseInt(process.env.DATA_TTL_DAYS || '5', 10) || 5);
-// created_at 以 datetime('now','localtime') 存储，构造等价的过期时间表达式。
-// TTL_DAYS 已保证为整数，内联进 SQL 无注入风险。
-const EXPIRED = `datetime('now','localtime','-${TTL_DAYS} days')`;
+/** 数据保留天数：默认取环境变量，管理员可在运行时通过 settings 表覆盖。 */
+const DEFAULT_TTL_DAYS = Math.max(1, parseInt(process.env.DATA_TTL_DAYS || '5', 10) || 5);
 
 const db = new Database(path.join(DATA_DIR, 'local-qq.db'));
 db.pragma('journal_mode = WAL');
@@ -61,6 +58,13 @@ CREATE TABLE IF NOT EXISTS user_reads (
   updated_at   TEXT NOT NULL DEFAULT (datetime('now','localtime')),
   PRIMARY KEY (user_id, conv_key)
 );
+
+-- 管理员可调设置（key-value）；保留天数未设置时回退 DEFAULT_TTL_DAYS
+CREATE TABLE IF NOT EXISTS settings (
+  key        TEXT PRIMARY KEY,
+  value      TEXT NOT NULL,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
 `);
 
 // 轻量迁移：为旧库补 revoked（撤回标记）列
@@ -91,20 +95,32 @@ const stmt = {
   deleteFilesByUser: db.prepare('DELETE FROM files WHERE uploader_id = ?'),
   deleteReadsByUser: db.prepare('DELETE FROM user_reads WHERE user_id = ?'),
 
-  // ---- 过期清理（数据有效期 TTL_DAYS 天）----
+  // ---- 过期清理（保留天数由 settings 表动态决定，调用方传入修饰符如 '-5 days'）----
   expiredFiles: db.prepare(
-    `SELECT id, stored_name FROM files WHERE created_at < ${EXPIRED}`
+    `SELECT id, stored_name FROM files WHERE created_at < datetime('now','localtime', ?)`
   ),
-  deleteExpiredFiles: db.prepare(`DELETE FROM files WHERE created_at < ${EXPIRED}`),
+  deleteExpiredFiles: db.prepare(
+    `DELETE FROM files WHERE created_at < datetime('now','localtime', ?)`
+  ),
   deleteExpiredMessages: db.prepare(
-    `DELETE FROM messages WHERE created_at < ${EXPIRED}`
+    `DELETE FROM messages WHERE created_at < datetime('now','localtime', ?)`
   ),
   // 文件已不在（过期/被删）但消息还在的情况：清理这类"死"文件消息
+  // 文件已不在（过期/被删）但消息还在的情况：清理这类"死"文件消息。
+  // 仅清理已过消息保留期的，避免文件 TTL 较短时把未到期消息提前删掉。
   deleteOrphanFileMessages: db.prepare(
     `DELETE FROM messages WHERE type = 'file'
+       AND created_at < datetime('now','localtime', ?)
        AND CAST(json_extract(content, '$.fileId') AS INTEGER) NOT IN (SELECT id FROM files)`
   ),
   countUsers: db.prepare('SELECT COUNT(*) AS n FROM users'),
+
+  // ---- 运行时设置（存储保留时间等）----
+  getSetting: db.prepare('SELECT value FROM settings WHERE key = ?'),
+  setSetting: db.prepare(
+    `INSERT INTO settings (key, value) VALUES (?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value,
+       updated_at = datetime('now','localtime')`),
 
   insertFile: db.prepare(
     'INSERT INTO files (uploader_id, stored_name, original_name, mime_type, size) VALUES (?, ?, ?, ?, ?)'
@@ -177,4 +193,20 @@ const stmt = {
   ),
 };
 
-module.exports = { db, stmt, TTL_DAYS };
+/** 读取保留天数设置（1-3650），未设置或非法时回退默认值。key: 'file_ttl_days' | 'message_ttl_days' */
+function getTtlDays(key) {
+  const row = stmt.getSetting.get(key);
+  const n = parseInt(row?.value, 10);
+  return Number.isInteger(n) && n >= 1 && n <= 3650 ? n : DEFAULT_TTL_DAYS;
+}
+
+/** 读取全部存储设置（供管理面板展示）。 */
+function getStorageSettings() {
+  return {
+    fileTtlDays: getTtlDays('file_ttl_days'),
+    messageTtlDays: getTtlDays('message_ttl_days'),
+    defaultTtlDays: DEFAULT_TTL_DAYS,
+  };
+}
+
+module.exports = { db, stmt, TTL_DAYS: DEFAULT_TTL_DAYS, getTtlDays, getStorageSettings };

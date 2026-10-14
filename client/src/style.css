@@ -363,3 +363,23 @@ button { cursor: pointer; font-family: inherit; }
   cursor: pointer; border-radius: 6px;
 }
 .emoji-item:hover { background: #f0f6ff; }
+
+/* ---------- 保留时间设置 ---------- */
+.ttl-row {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  background: #f4f7fa; border-radius: 8px; padding: 10px 12px; margin-bottom: 14px;
+  font-size: 13px; color: #2c3e50;
+}
+.ttl-row label { display: flex; align-items: center; gap: 6px; }
+.ttl-row input {
+  width: 64px; padding: 4px 8px; border: 1px solid #d5dee6; border-radius: 6px;
+  font-size: 13px;
+}
+.ttl-row input:focus { outline: none; border-color: #4a90d9; }
+.save-btn {
+  border: none; background: #4a90d9; color: #fff; padding: 5px 12px;
+  border-radius: 6px; font-size: 12px; cursor: pointer;
+}
+.save-btn:hover { background: #3a7fc4; }
+.save-btn:disabled { opacity: 0.6; cursor: default; }
+.ttl-saved { font-size: 12px; color: #27ae60; }

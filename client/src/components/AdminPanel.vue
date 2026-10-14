@@ -48,6 +48,14 @@
 
       <template v-else>
         <div v-if="stats" class="stats-panel">
+          <!-- 保留时间设置 -->
+          <div class="ttl-row">
+            <label>文件保留 <input v-model.number="ttl.file" type="number" min="1" max="3650" /> 天</label>
+            <label>消息保留 <input v-model.number="ttl.msg" type="number" min="1" max="3650" /> 天</label>
+            <button class="save-btn" :disabled="savingTtl" @click="saveTtl">{{ savingTtl ? '保存中…' : '保存' }}</button>
+            <button class="save-btn" :disabled="cleaning" @click="runCleanup">{{ cleaning ? '清理中…' : '立即清理过期' }}</button>
+            <span v-if="ttlSaved" class="ttl-saved">✓ 已保存，每小时自动清理时生效</span>
+          </div>
           <div class="stats-cards">
             <div class="stat-card"><b>{{ stats.messageCount }}</b><span>消息总数</span></div>
             <div class="stat-card"><b>{{ stats.fileCount }}</b><span>文件数</span></div>
@@ -85,6 +93,50 @@ const error = ref('')
 const tab = ref('users')
 const stats = ref(null)
 
+// 保留时间设置
+const ttl = ref({ file: 5, msg: 5 })
+const savingTtl = ref(false)
+const ttlSaved = ref(false)
+const cleaning = ref(false)
+
+async function loadTtl() {
+  try {
+    const s = (await api.storageSettings()).settings
+    ttl.value = { file: s.fileTtlDays, msg: s.messageTtlDays }
+  } catch { /* 忽略 */ }
+}
+
+async function saveTtl() {
+  error.value = ''
+  ttlSaved.value = false
+  savingTtl.value = true
+  try {
+    const s = (await api.saveStorageSettings({ fileTtlDays: ttl.value.file, messageTtlDays: ttl.value.msg })).settings
+    ttl.value = { file: s.fileTtlDays, msg: s.messageTtlDays }
+    ttlSaved.value = true
+    setTimeout(() => (ttlSaved.value = false), 4000)
+  } catch (e) {
+    error.value = e.message
+  } finally {
+    savingTtl.value = false
+  }
+}
+
+/** 手动触发一轮过期清理，弹结果。 */
+async function runCleanup() {
+  error.value = ''
+  cleaning.value = true
+  try {
+    const r = (await api.runCleanup()).result
+    alert(`清理完成：消息 ${r.messages} 条、文件 ${r.files} 个（磁盘 ${r.unlinked}）、死文件消息 ${r.orphanFileMessages} 条`)
+    await showStats()
+  } catch (e) {
+    error.value = e.message
+  } finally {
+    cleaning.value = false
+  }
+}
+
 async function showStats() {
   tab.value = 'stats'
   try {
@@ -92,6 +144,7 @@ async function showStats() {
   } catch (e) {
     error.value = e.message
   }
+  loadTtl()
 }
 
 function fmtSize(n) {
