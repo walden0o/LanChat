@@ -9,6 +9,12 @@ const Database = require('better-sqlite3');
 const DATA_DIR = path.join(__dirname, '..', 'data');
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
+/** 数据保留天数（消息与文件），默认 5 天，可用 DATA_TTL_DAYS 覆盖。 */
+const TTL_DAYS = Math.max(1, parseInt(process.env.DATA_TTL_DAYS || '5', 10) || 5);
+// created_at 以 datetime('now','localtime') 存储，构造等价的过期时间表达式。
+// TTL_DAYS 已保证为整数，内联进 SQL 无注入风险。
+const EXPIRED = `datetime('now','localtime','-${TTL_DAYS} days')`;
+
 const db = new Database(path.join(DATA_DIR, 'local-qq.db'));
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
@@ -67,6 +73,20 @@ const stmt = {
   ),
   listFilesByUser: db.prepare('SELECT stored_name FROM files WHERE uploader_id = ?'),
   deleteFilesByUser: db.prepare('DELETE FROM files WHERE uploader_id = ?'),
+
+  // ---- 过期清理（数据有效期 TTL_DAYS 天）----
+  expiredFiles: db.prepare(
+    `SELECT id, stored_name FROM files WHERE created_at < ${EXPIRED}`
+  ),
+  deleteExpiredFiles: db.prepare(`DELETE FROM files WHERE created_at < ${EXPIRED}`),
+  deleteExpiredMessages: db.prepare(
+    `DELETE FROM messages WHERE created_at < ${EXPIRED}`
+  ),
+  // 文件已不在（过期/被删）但消息还在的情况：清理这类"死"文件消息
+  deleteOrphanFileMessages: db.prepare(
+    `DELETE FROM messages WHERE type = 'file'
+       AND CAST(json_extract(content, '$.fileId') AS INTEGER) NOT IN (SELECT id FROM files)`
+  ),
   countUsers: db.prepare('SELECT COUNT(*) AS n FROM users'),
 
   insertFile: db.prepare(
@@ -94,4 +114,4 @@ const stmt = {
   ),
 };
 
-module.exports = { db, stmt };
+module.exports = { db, stmt, TTL_DAYS };

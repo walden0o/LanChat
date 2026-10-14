@@ -13,6 +13,7 @@
 - **文本预览**：`.txt`/`.md`/`.json`/代码文件等点击即在弹窗预览；大文件只拉取前 256KB（HTTP Range）
 - **用户管理**：管理员可禁用 / 启用、授予 / 撤销管理员、删除用户；禁用和删除会实时踢下线
 - **在线状态**：联系人列表实时显示谁在线；未读消息角标；"正在输入"提示
+- **数据有效期**：消息与文件默认保留 5 天，服务端每小时自动清理过期数据（含磁盘文件）
 
 ## 快速开始
 
@@ -57,6 +58,30 @@ npm --prefix client run dev
 | `JWT_SECRET` | 内置开发值 | **生产部署务必设置**，例如 `JWT_SECRET=$(openssl rand -hex 32) npm start` |
 | `TOKEN_TTL` | `7d` | 登录态有效期 |
 | `MAX_FILE_SIZE_MB` | `500` | 单文件大小上限（MB） |
+| `DATA_TTL_DAYS` | `5` | 消息与文件保留天数，过期自动删除（用户账号不过期） |
+
+## 开机自启动（systemd 用户服务，无需 root）
+
+本仓库提供单元模板 `deploy/local-qq.service`：
+
+```bash
+# 1. 允许用户服务在未登录时运行（本机已开启）
+loginctl enable-linger
+
+# 2. 复制并修改模板（WorkingDirectory、node 路径、JWT_SECRET）
+mkdir -p ~/.config/systemd/user
+cp deploy/local-qq.service ~/.config/systemd/user/
+# 编辑 ~/.config/systemd/user/local-qq.service，替换 CHANGE_ME 等占位
+
+# 3. 启用并启动
+systemctl --user daemon-reload
+systemctl --user enable --now local-qq
+
+# 常用运维命令
+systemctl --user status local-qq    # 查看状态
+systemctl --user restart local-qq   # 重启
+journalctl --user -u local-qq -f    # 查看日志
+```
 
 ## 数据存放
 
