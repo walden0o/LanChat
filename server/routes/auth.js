@@ -12,7 +12,7 @@ const fs = require('fs');
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { db, stmt, getStorageSettings } = require('../db');
+const { db, stmt, getStorageSettings, DATA_DIR } = require('../db');
 
 /** 上传目录（与 routes/files.js 保持一致）。 */
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, '..', '..', 'uploads');
@@ -231,7 +231,7 @@ function makeSnippet(content, q) {
 // ---------- 存储统计（管理员）----------
 
 router.get('/stats', requireAuth, requireAdmin, (req, res) => {
-  const dbFile = path.join(__dirname, '..', '..', 'data', 'local-qq.db');
+  const dbFile = path.join(DATA_DIR, 'local-qq.db');
   let dbBytes = 0;
   for (const suffix of ['', '-wal', '-shm']) {
     try {
@@ -282,6 +282,46 @@ router.post('/storage-settings', requireAuth, requireAdmin, (req, res) => {
 router.post('/cleanup', requireAuth, requireAdmin, (req, res) => {
   const { cleanup } = require('../cleanup');
   res.json({ result: cleanup() });
+});
+
+// ---------- 文件管理：列表 / 删除（管理员）----------
+
+// 文件列表（最新在前，默认 200 条，可 ?limit= 指定）
+router.get('/files', requireAuth, requireAdmin, (req, res) => {
+  const limit = Math.min(Math.max(Number(req.query.limit) || 200, 1), 1000);
+  const files = stmt.listFiles.all(limit).map((f) => ({
+    id: f.id,
+    name: f.original_name,
+    size: f.size,
+    mime: f.mime_type,
+    uploaderId: f.uploader_id,
+    uploaderNickname: f.uploader_nickname,
+    createdAt: f.created_at,
+  }));
+  res.json({ files });
+});
+
+/**
+ * 删除文件：事务内删记录 + 引用它的消息，事务外删磁盘文件。
+ * 删消息是为了不留下打不开的"死"文件卡片。
+ * 磁盘删除失败不阻塞接口（记录已删，残留文件由清理任务兜底）。
+ */
+router.delete('/files/:id', requireAuth, requireAdmin, (req, res) => {
+  const id = Number(req.params.id);
+  const file = stmt.findFileById.get(id);
+  if (!file) return res.status(404).json({ error: '文件不存在' });
+
+  const deletedMessages = db.transaction(() => {
+    const msgs = stmt.deleteMessagesByFileId.run(id).changes;
+    stmt.deleteFileById.run(id);
+    return msgs;
+  })();
+  fs.rmSync(path.join(UPLOAD_DIR, file.stored_name), { force: true });
+
+  // 通知在线客户端，实时移除消息流中的该文件卡片
+  req.app.get('io')?.emit('file:deleted', { id });
+
+  res.json({ ok: true, deletedMessages });
 });
 
 module.exports = { router, requireAuth, verifyToken };

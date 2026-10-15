@@ -105,7 +105,6 @@ const stmt = {
   deleteExpiredMessages: db.prepare(
     `DELETE FROM messages WHERE created_at < datetime('now','localtime', ?)`
   ),
-  // 文件已不在（过期/被删）但消息还在的情况：清理这类"死"文件消息
   // 文件已不在（过期/被删）但消息还在的情况：清理这类"死"文件消息。
   // 仅清理已过消息保留期的，避免文件 TTL 较短时把未到期消息提前删掉。
   deleteOrphanFileMessages: db.prepare(
@@ -217,4 +216,4 @@ function getStorageSettings() {
   };
 }
 
-module.exports = { db, stmt, TTL_DAYS: DEFAULT_TTL_DAYS, getTtlDays, getStorageSettings };
+module.exports = { db, stmt, DATA_DIR, TTL_DAYS: DEFAULT_TTL_DAYS, getTtlDays, getStorageSettings };

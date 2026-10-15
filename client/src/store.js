@@ -175,6 +175,14 @@ function connectSocket() {
     }
   })
 
+  // 管理员删除文件：实时移除所有会话中引用该文件的消息
+  socket.on('file:deleted', ({ id }) => {
+    for (const [key, list] of Object.entries(state.messages)) {
+      const kept = list.filter((m) => !(m.type === 'file' && m.content?.fileId === id))
+      if (kept.length !== list.length) state.messages[key] = kept
+    }
+  })
+
   // 对方已读我的私聊消息：记录其读到的最大 id
   socket.on('read:update', ({ conv, peerId, userId, lastReadId }) => {
     if (conv === 'group') {

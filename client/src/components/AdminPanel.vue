@@ -2,10 +2,11 @@
   <div class="modal-mask" @click.self="$emit('close')">
     <div class="modal">
       <div class="modal-head">
-        <h3>{{ tab === 'users' ? '用户管理' : '存储统计' }}</h3>
+        <h3>{{ TABS[tab] }}</h3>
         <div class="text-modal-ops">
           <button class="tab-btn" :class="{ active: tab === 'users' }" @click="tab = 'users'">用户</button>
           <button class="tab-btn" :class="{ active: tab === 'stats' }" @click="showStats">存储</button>
+          <button class="tab-btn" :class="{ active: tab === 'files' }" @click="showFiles">文件</button>
           <button class="icon-btn" @click="$emit('close')">✕</button>
         </div>
       </div>
@@ -46,7 +47,7 @@
       </table>
       </template>
 
-      <template v-else>
+      <template v-else-if="tab === 'stats'">
         <div v-if="stats" class="stats-panel">
           <!-- 保留时间设置 -->
           <div class="ttl-row">
@@ -78,20 +79,111 @@
         <p v-else class="form-error">加载中…</p>
       </template>
 
+      <!-- 文件管理：列表 + 删除 -->
+      <template v-else>
+        <div class="files-head">
+          <span class="files-count">
+            共 {{ files.length }} 个文件，占用 {{ fmtSize(filesSize) }}
+          </span>
+          <button class="save-btn" :disabled="loadingFiles" @click="loadFiles">
+            {{ loadingFiles ? '加载中…' : '刷新' }}
+          </button>
+        </div>
+        <table v-if="files.length" class="user-table">
+          <thead>
+            <tr>
+              <th>文件名</th>
+              <th>大小</th>
+              <th>上传者</th>
+              <th>上传时间</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="f in files" :key="f.id">
+              <td class="file-cell">
+                <span class="file-badge">{{ fileIcon(f.mime) }}</span>
+                <span class="file-title">{{ f.name }}</span>
+              </td>
+              <td>{{ fmtSize(f.size) }}</td>
+              <td>{{ f.uploaderNickname }}</td>
+              <td>{{ f.createdAt.slice(5, 16) }}</td>
+              <td class="ops">
+                <button @click="downloadFile(f.id, f.name)">下载</button>
+                <button class="btn-danger" @click="removeFile(f)">删除</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <p v-else-if="!loadingFiles" class="form-error">暂无文件</p>
+      </template>
+
       <p v-if="error" class="form-error">{{ error }}</p>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import { api } from '../api.js'
+import { ref, computed, onMounted } from 'vue'
+import { api, downloadFile } from '../api.js'
 import { state } from '../store.js'
+
+const TABS = { users: '用户管理', stats: '存储统计', files: '文件管理' }
 
 const users = ref([])
 const error = ref('')
 const tab = ref('users')
 const stats = ref(null)
+
+// 文件管理
+const files = ref([])
+const loadingFiles = ref(false)
+const filesSize = computed(() => files.value.reduce((sum, f) => sum + f.size, 0))
+
+async function showFiles() {
+  tab.value = 'files'
+  await loadFiles()
+}
+
+async function loadFiles() {
+  error.value = ''
+  loadingFiles.value = true
+  try {
+    files.value = (await api.files(500)).files
+  } catch (e) {
+    error.value = e.message
+  } finally {
+    loadingFiles.value = false
+  }
+}
+
+/** 依据 MIME 粗分文件类型，仅用于列表图标显示。 */
+function fileIcon(mime = '') {
+  if (mime.startsWith('image/')) return '🖼️'
+  if (mime.startsWith('video/')) return '🎬'
+  if (mime.startsWith('audio/')) return '🎵'
+  if (mime.startsWith('text/') || mime.includes('json') || mime.includes('xml')) return '📝'
+  if (mime.includes('zip') || mime.includes('compressed') || mime.includes('tar')) return '🗜️'
+  if (mime.includes('pdf')) return '📕'
+  if (mime.includes('word') || mime.includes('document')) return '📄'
+  if (mime.includes('sheet') || mime.includes('excel')) return '📗'
+  return '📎'
+}
+
+/** 删除文件：连带删除引用它的消息，服务端返回受影响消息数。 */
+async function removeFile(f) {
+  if (!confirm(`确定删除文件「${f.name}」（${fmtSize(f.size)}）？\n聊天记录中的该文件消息也会一并删除。`)) return
+  error.value = ''
+  try {
+    const r = await api.deleteFile(f.id)
+    files.value = files.value.filter((x) => x.id !== f.id)
+    if (r.deletedMessages > 0) {
+      alert(`已删除文件，同时移除 ${r.deletedMessages} 条相关消息。`)
+    }
+  } catch (e) {
+    error.value = e.message
+  }
+}
 
 // 保留时间设置
 const ttl = ref({ file: 5, msg: 5 })

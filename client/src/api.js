@@ -28,6 +28,8 @@ export const api = {
   users: () => request('/users'),
   search: (q) => request(`/search?q=${encodeURIComponent(q)}`),
   stats: () => request('/stats'),
+  files: (limit) => request(limit ? `/files?limit=${limit}` : '/files'),
+  deleteFile: (id) => request(`/files/${id}`, { method: 'DELETE' }),
   storageSettings: () => request('/storage-settings'),
   saveStorageSettings: (body) => request('/storage-settings', { method: 'POST', body }),
   runCleanup: () => request('/cleanup', { method: 'POST', body: {} }),
