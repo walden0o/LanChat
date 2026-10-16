@@ -31,6 +31,7 @@ export const api = {
   files: (limit) => request(limit ? `/files?limit=${limit}` : '/files'),
   deleteFile: (id) => request(`/files/${id}`, { method: 'DELETE' }),
   storageSettings: () => request('/storage-settings'),
+  uploadLimit: () => request('/files/limit'),
   saveStorageSettings: (body) => request('/storage-settings', { method: 'POST', body }),
   runCleanup: () => request('/cleanup', { method: 'POST', body: {} }),
   toggleDisabled: (id) => request(`/users/${id}/disable`, { method: 'POST' }),

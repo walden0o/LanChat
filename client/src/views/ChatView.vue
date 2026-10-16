@@ -82,6 +82,7 @@
             <line x1="12" y1="3" x2="12" y2="15" />
           </svg>
           <p>松开鼠标，发送到{{ state.currentKey === 'group' ? '群聊' : '当前会话' }}</p>
+          <span v-if="maxUploadMb" class="drop-limit">单文件上限 {{ maxUploadMb }} MB</span>
         </div>
       </div>
       <header class="chat-header">
@@ -261,7 +262,7 @@
         </div>
         <div class="input-row">
           <div class="input-toolbar">
-            <button class="icon-btn" title="发送文件" :disabled="state.uploading" @click="fileInput.click()">
+            <button class="icon-btn" :title="`发送文件（单文件上限 ${maxUploadMb || '—'} MB）`" :disabled="state.uploading" @click="fileInput.click()">
               {{ state.uploading ? '⏳' : '📎' }}
             </button>
             <button class="icon-btn" title="表情" @click="showEmoji = !showEmoji">
@@ -496,9 +497,14 @@ async function onDrop(e) {
   if (files.length) await sendFiles(files)
 }
 
-/** 逐个上传并发送（支持一次拖入多个文件）。 */
+/** 逐个上传并发送（支持一次拖入多个文件）；超限文件提前拦截。 */
+const maxUploadMb = ref(0)
 async function sendFiles(files) {
   for (const file of files) {
+    if (maxUploadMb.value && file.size > maxUploadMb.value * 1024 * 1024) {
+      uiAlert(`${file.name} 超过单文件上限（${maxUploadMb.value} MB）`, { title: '无法发送' })
+      continue
+    }
     try {
       await sendFile(file)
     } catch (err) {
@@ -506,6 +512,12 @@ async function sendFiles(files) {
       break
     }
   }
+}
+
+async function loadUploadLimit() {
+  try {
+    maxUploadMb.value = (await api.uploadLimit()).maxUploadMb
+  } catch { /* 离线时忽略，发送时服务端仍会兜底校验 */ }
 }
 
 // 新消息到达时，若已在底部附近则自动滚到底
@@ -702,6 +714,7 @@ function onGlobalKey(e) {
 
 // 用户首次交互后请求桌面通知授权（浏览器要求交互后才能弹授权框）
 onMounted(() => {
+  loadUploadLimit()
   const once = () => {
     requestNotifyPermission()
     window.removeEventListener('click', once)

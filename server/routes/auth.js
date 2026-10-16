@@ -260,7 +260,7 @@ router.get('/storage-settings', requireAuth, requireAdmin, (req, res) => {
 
 // 修改保留时间（文件/消息独立，1-3650 天），保存后下一轮清理即生效
 router.post('/storage-settings', requireAuth, requireAdmin, (req, res) => {
-  const { fileTtlDays, messageTtlDays } = req.body || {};
+  const { fileTtlDays, messageTtlDays, maxUploadMb } = req.body || {};
   const apply = (key, v) => {
     if (v === undefined || v === null || v === '') return; // 未提交的字段不动
     const n = Number(v);
@@ -269,9 +269,18 @@ router.post('/storage-settings', requireAuth, requireAdmin, (req, res) => {
     }
     stmt.setSetting.run(key, String(n));
   };
+  const applyUploadMb = (v) => {
+    if (v === undefined || v === null || v === '') return;
+    const n = Number(v);
+    if (!Number.isInteger(n) || n < 1 || n > 2048) {
+      throw new Error('上传上限需为 1-2048 的整数（MB）');
+    }
+    stmt.setSetting.run('max_upload_mb', String(n));
+  };
   try {
     apply('file_ttl_days', fileTtlDays);
     apply('message_ttl_days', messageTtlDays);
+    applyUploadMb(maxUploadMb);
   } catch (e) {
     return res.status(400).json({ error: e.message });
   }

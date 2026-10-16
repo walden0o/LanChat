@@ -1213,3 +1213,8 @@ a:focus-visible,
   font-weight: 600;
   color: var(--brand-ink);
 }
+
+.drop-limit {
+  font-size: 12px;
+  color: var(--ink-3);
+}

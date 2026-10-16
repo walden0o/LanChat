@@ -53,6 +53,7 @@
           <div class="ttl-row">
             <label>文件保留 <input v-model.number="ttl.file" type="number" min="1" max="3650" /> 天</label>
             <label>消息保留 <input v-model.number="ttl.msg" type="number" min="1" max="3650" /> 天</label>
+            <label>上传上限 <input v-model.number="ttl.maxMb" type="number" min="1" max="2048" /> MB</label>
             <button class="save-btn" :disabled="savingTtl" @click="saveTtl">{{ savingTtl ? '保存中…' : '保存' }}</button>
             <button class="save-btn" :disabled="cleaning" @click="runCleanup">{{ cleaning ? '清理中…' : '立即清理过期' }}</button>
             <span v-if="ttlSaved" class="ttl-saved">✓ 已保存，每小时自动清理时生效</span>
@@ -196,7 +197,7 @@ async function removeFile(f) {
 }
 
 // 保留时间设置
-const ttl = ref({ file: 5, msg: 5 })
+const ttl = ref({ file: 5, msg: 5, maxMb: 500 })
 const savingTtl = ref(false)
 const ttlSaved = ref(false)
 const cleaning = ref(false)
@@ -204,7 +205,7 @@ const cleaning = ref(false)
 async function loadTtl() {
   try {
     const s = (await api.storageSettings()).settings
-    ttl.value = { file: s.fileTtlDays, msg: s.messageTtlDays }
+    ttl.value = { file: s.fileTtlDays, msg: s.messageTtlDays, maxMb: s.maxUploadMb }
   } catch { /* 忽略 */ }
 }
 
@@ -213,8 +214,8 @@ async function saveTtl() {
   ttlSaved.value = false
   savingTtl.value = true
   try {
-    const s = (await api.saveStorageSettings({ fileTtlDays: ttl.value.file, messageTtlDays: ttl.value.msg })).settings
-    ttl.value = { file: s.fileTtlDays, msg: s.messageTtlDays }
+    const s = (await api.saveStorageSettings({ fileTtlDays: ttl.value.file, messageTtlDays: ttl.value.msg, maxUploadMb: ttl.value.maxMb })).settings
+    ttl.value = { file: s.fileTtlDays, msg: s.messageTtlDays, maxMb: s.maxUploadMb }
     ttlSaved.value = true
     setTimeout(() => (ttlSaved.value = false), 4000)
   } catch (e) {

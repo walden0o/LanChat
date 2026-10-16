@@ -120,9 +120,26 @@ async function upload(token, name, content) {
   assert(f3.fileId, '删除功能不应影响上传');
   await req(`/api/files/${f3.fileId}`, { method: 'DELETE', token: admin.token });
 
+  // ---- 上传大小上限（管理员可设置，运行时生效） ----
+  const limit0 = (await req('/api/files/limit', { token: member.token })).data;
+  assert(limit0.maxUploadMb === 500, '默认上限应为 500MB: ' + JSON.stringify(limit0));
+  const badSet = await req('/api/storage-settings', { method: 'POST', token: admin.token, body: { maxUploadMb: 0 } });
+  assert(badSet.status === 400, '非法上限（0）应被拒绝');
+  const denied = await req('/api/storage-settings', { method: 'POST', token: member.token, body: { maxUploadMb: 1 } });
+  assert(denied.status === 403, '非管理员不能改上限');
+  const set1 = (await req('/api/storage-settings', { method: 'POST', token: admin.token, body: { maxUploadMb: 1 } })).data;
+  assert(set1.settings.maxUploadMb === 1, '设置 1MB 上限应生效');
+  const limitNow = (await req('/api/files/limit', { token: member.token })).data;
+  assert(limitNow.maxUploadMb === 1, '普通用户应能查到新上限');
+  const tooBig = await upload(admin.token, '超大.txt', 'X'.repeat(2 * 1024 * 1024));
+  assert(tooBig.error && /上限/.test(tooBig.error), '超限上传应被拒绝: ' + JSON.stringify(tooBig));
+  const okSmall = await upload(admin.token, '小文件.txt', 'ok');
+  assert(okSmall.fileId, '限内上传仍应成功');
+  await req('/api/storage-settings', { method: 'POST', token: admin.token, body: { maxUploadMb: 500 } });
+
   sa.disconnect();
   sm.disconnect();
-  console.log('文件管理验证全部通过 ✓  （列表/删除/级联删消息/磁盘清理/实时通知/越权拒绝/回归）');
+  console.log('文件管理验证全部通过 ✓  （列表/删除/级联删消息/磁盘清理/实时通知/越权拒绝/回归/上传上限）');
   process.exit(0);
 })().catch((e) => {
   console.error('✗ 失败:', e.message);

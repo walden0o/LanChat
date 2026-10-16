@@ -207,13 +207,26 @@ function getTtlDays(key) {
   return Number.isInteger(n) && n >= 1 && n <= 3650 ? n : DEFAULT_TTL_DAYS;
 }
 
+/** 单文件上传大小上限（MB）：默认取环境变量，管理员可通过 settings 表在运行时覆盖。 */
+const DEFAULT_MAX_UPLOAD_MB = Math.min(Number(process.env.MAX_FILE_SIZE_MB) || 500, 2048);
+const MAX_UPLOAD_HARD_CAP_MB = 2048;
+
+/** 当前生效的上传上限（MB）。 */
+function getMaxUploadMb() {
+  const row = stmt.getSetting.get('max_upload_mb');
+  const n = parseInt(row?.value, 10);
+  return Number.isInteger(n) && n >= 1 && n <= MAX_UPLOAD_HARD_CAP_MB ? n : DEFAULT_MAX_UPLOAD_MB;
+}
+
 /** 读取全部存储设置（供管理面板展示）。 */
 function getStorageSettings() {
   return {
     fileTtlDays: getTtlDays('file_ttl_days'),
     messageTtlDays: getTtlDays('message_ttl_days'),
     defaultTtlDays: DEFAULT_TTL_DAYS,
+    maxUploadMb: getMaxUploadMb(),
+    defaultMaxUploadMb: DEFAULT_MAX_UPLOAD_MB,
   };
 }
 
-module.exports = { db, stmt, DATA_DIR, TTL_DAYS: DEFAULT_TTL_DAYS, getTtlDays, getStorageSettings };
+module.exports = { db, stmt, DATA_DIR, TTL_DAYS: DEFAULT_TTL_DAYS, getTtlDays, getStorageSettings, getMaxUploadMb };

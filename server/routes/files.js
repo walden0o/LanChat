@@ -15,7 +15,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const express = require('express');
 const multer = require('multer');
-const { stmt } = require('../db');
+const { stmt, getMaxUploadMb } = require('../db');
 const { requireAuth, verifyToken } = require('./auth');
 
 /** 可安全内联预览的类型；SVG 可执行脚本，必须排除。 */
@@ -38,25 +38,55 @@ function requireAuthOrQuery(req, res, next) {
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, '..', '..', 'uploads');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
-/** 单文件大小上限（默认 500MB，可用 MAX_FILE_SIZE_MB 覆盖）。 */
-const MAX_FILE_SIZE = (Number(process.env.MAX_FILE_SIZE_MB) || 500) * 1024 * 1024;
+/**
+ * 单文件大小上限（MB）：管理员可在存储设置中运行时调整（1-2048）。
+ * multer 的 limits 在构造时固定，这里用 2048MB 硬顶作兜底，
+ * 实际上限在路由内按当前设置动态校验（Content-Length 预检 + 落盘后复核）。
+ */
+const limitBytes = () => getMaxUploadMb() * 1024 * 1024;
+const HARD_CAP = 2048 * 1024 * 1024;
 
-const upload = multer({
-  storage: multer.diskStorage({
-    destination: UPLOAD_DIR,
-    // 随机存储名 + 保留扩展名，避免冲突与路径注入
-    filename: (req, file, cb) => {
-      const ext = path.extname(file.originalname).slice(0, 16);
-      cb(null, `${Date.now()}-${crypto.randomBytes(8).toString('hex')}${ext}`);
-    },
-  }),
-  limits: { fileSize: MAX_FILE_SIZE },
+const storage = multer.diskStorage({
+  destination: UPLOAD_DIR,
+  // 随机存储名 + 保留扩展名，避免冲突与路径注入
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).slice(0, 16);
+    cb(null, `${Date.now()}-${crypto.randomBytes(8).toString('hex')}${ext}`);
+  },
 });
 
 const router = express.Router();
 
-router.post('/', requireAuth, upload.single('file'), (req, res) => {
+/** 当前上传上限（登录即可查，客户端用于发送前预检与提示）。 */
+router.get('/limit', requireAuth, (req, res) => {
+  res.json({ maxUploadMb: getMaxUploadMb() });
+});
+
+/** Content-Length 预检：超限直接拒绝，不落盘。 */
+router.post('/', requireAuth, (req, res, next) => {
+  const declared = Number(req.headers['content-length']);
+  if (Number.isFinite(declared) && declared > limitBytes() + 64 * 1024) {
+    return res.status(413).json({ error: `文件超过大小上限（${getMaxUploadMb()} MB）` });
+  }
+  uploadMiddleware(req, res, (err) => {
+    if (err) {
+      const msg = err.code === 'LIMIT_FILE_SIZE' ? `文件超过大小上限（${getMaxUploadMb()} MB）` : '上传失败';
+      if (req.file?.path) fs.unlink(req.file.path, () => {});
+      return res.status(413).json({ error: msg });
+    }
+    next();
+  });
+});
+
+const uploadMiddleware = multer({ storage, limits: { fileSize: HARD_CAP } }).single('file');
+
+router.post('/', (req, res) => {
   if (!req.file) return res.status(400).json({ error: '未收到文件' });
+  // 复核实际大小（无 Content-Length 的分块请求在此拦截），超限删除临时文件
+  if (req.file.size > limitBytes()) {
+    fs.unlink(req.file.path, () => {});
+    return res.status(413).json({ error: `文件超过大小上限（${getMaxUploadMb()} MB）` });
+  }
   // multer 对 originalname 按 latin1 解码，中文文件名需转回 utf8
   const originalName = Buffer.from(req.file.originalname, 'latin1').toString('utf8');
   const info = stmt.insertFile.run(
