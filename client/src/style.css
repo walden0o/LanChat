@@ -1176,3 +1176,40 @@ a:focus-visible,
 .mini-btn.primary:hover { filter: brightness(1.06); box-shadow: 0 4px 12px rgba(18, 183, 245, 0.35); }
 .mini-btn.primary.danger { background: linear-gradient(135deg, #e64545, #d63838); }
 .mini-btn.primary.danger:hover { box-shadow: 0 4px 12px rgba(230, 69, 69, 0.35); }
+
+/* ---------- 文件拖拽上传提示层 ---------- */
+.drop-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(18, 183, 245, 0.08);
+  backdrop-filter: blur(2px);
+  animation: fade-in 0.15s var(--ease);
+  pointer-events: none;
+}
+.drop-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 34px 52px;
+  border: 2px dashed var(--brand);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: var(--sh-pop);
+  animation: card-in 0.2s var(--ease);
+}
+.drop-card svg {
+  width: 42px;
+  height: 42px;
+  color: var(--brand);
+}
+.drop-card p {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--brand-ink);
+}

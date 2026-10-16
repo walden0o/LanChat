@@ -65,8 +65,25 @@
       </ul>
     </aside>
 
-    <!-- 右侧：消息区 + 输入区 -->
-    <main class="main">
+    <!-- 右侧：消息区 + 输入区（支持拖拽文件到此处直接发送） -->
+    <main
+      class="main"
+      @dragenter.prevent="onDragEnter"
+      @dragover.prevent="onDragOverEvt"
+      @dragleave.prevent="onDragLeave"
+      @drop.prevent="onDrop"
+    >
+      <!-- 拖拽悬浮提示层 -->
+      <div v-if="dragOver" class="drop-overlay">
+        <div class="drop-card">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="17 8 12 3 7 8" />
+            <line x1="12" y1="3" x2="12" y2="15" />
+          </svg>
+          <p>松开鼠标，发送到{{ state.currentKey === 'group' ? '群聊' : '当前会话' }}</p>
+        </div>
+      </div>
       <header class="chat-header">
         <button class="icon-btn side-toggle" title="会话列表" @click="sideOpen = true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
@@ -453,13 +470,41 @@ function onDraftFocus() {
 }
 
 async function onPickFile(e) {
-  const file = e.target.files?.[0]
+  const files = [...(e.target.files || [])]
   e.target.value = ''
-  if (!file) return
-  try {
-    await sendFile(file)
-  } catch (err) {
-    uiAlert(err.message, { title: '上传失败' })
+  await sendFiles(files)
+}
+
+// ---------- 文件拖拽上传 ----------
+// dragleave 在经过子元素时会频繁触发，用"离开目标是否仍在容器内"判断真离开
+const dragOver = ref(false)
+const hasFiles = (e) => e.dataTransfer?.types?.includes('Files')
+
+function onDragEnter(e) {
+  if (hasFiles(e)) dragOver.value = true
+}
+function onDragOverEvt(e) {
+  if (hasFiles(e)) dragOver.value = true
+}
+function onDragLeave(e) {
+  const to = e.relatedTarget
+  if (!to || !e.currentTarget.contains(to)) dragOver.value = false
+}
+async function onDrop(e) {
+  dragOver.value = false
+  const files = [...(e.dataTransfer?.files || [])]
+  if (files.length) await sendFiles(files)
+}
+
+/** 逐个上传并发送（支持一次拖入多个文件）。 */
+async function sendFiles(files) {
+  for (const file of files) {
+    try {
+      await sendFile(file)
+    } catch (err) {
+      uiAlert(`${file.name}：${err.message}`, { title: '上传失败' })
+      break
+    }
   }
 }
 
