@@ -81,6 +81,21 @@ const emit = (s, ev, payload) => new Promise((res) => s.emit(ev, payload, res));
   const statsDenied = await get('/api/stats', b.token);
   assert(statsDenied.error, '非管理员应被拒绝: ' + JSON.stringify(statsDenied));
 
+  // ---- 给自己发消息 ----
+  const selfEcho = [];
+  sa.on('message:new', (m) => selfEcho.push(m));
+  const selfSent = await emit(sa, 'message:send', { to: a.user.id, type: 'text', content: '便签：给自己备忘' });
+  assert(selfSent.ok, '给自己发消息应成功: ' + JSON.stringify(selfSent));
+  await new Promise((r) => setTimeout(r, 150));
+  assert(selfEcho.some((m) => m.id === selfSent.id), '自己应收到消息回显');
+  const selfHist = await new Promise((res) => sa.emit('history:private', { userId: a.user.id }, res));
+  assert(selfHist.some((m) => m.id === selfSent.id && m.senderId === a.user.id && m.receiverId === a.user.id),
+    '私聊历史应含发给自己的消息');
+  const selfFile = await emit(sa, 'message:send', { to: a.user.id, type: 'file', content: JSON.stringify({ fileId: 999999 }) });
+  assert(selfFile.error, '无效文件仍应被拒绝');
+  sa.emit('read:update', { peerId: a.user.id }); // 自己会话的已读位置不应报错
+  await new Promise((r) => setTimeout(r, 100));
+
   sa.disconnect(); sb.disconnect();
   console.log('新功能验证全部通过 ✓  （撤回/已读/搜索/统计/越权校验）');
   process.exit(0);

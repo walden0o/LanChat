@@ -107,6 +107,8 @@ export const conversationList = computed(() => {
       (a, b) =>
         b.lastId - a.lastId || Number(b.online) - Number(a.online) || a.name.localeCompare(b.name)
     )
+  const selfKey = `u:${state.user?.id}`
+  const selfMsg = state.lastMsg[selfKey]
   return [
     {
       key: 'group',
@@ -116,6 +118,17 @@ export const conversationList = computed(() => {
       preview: previewText(groupMsg, true),
       time: convTime(groupMsg),
       color: '#2f80ed',
+    },
+    {
+      // 固定入口：给自己发消息（备忘 / 跨标签页中转）
+      key: selfKey,
+      name: '我自己',
+      online: true,
+      unread: state.unread[selfKey] || 0,
+      preview: previewText(selfMsg),
+      time: convTime(selfMsg),
+      lastId: selfMsg?.id || 0,
+      color: avatarColor(state.user?.id),
     },
     ...peers,
   ]

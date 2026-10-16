@@ -189,7 +189,8 @@ function setupChat(io) {
         return;
       }
       const peerId = Number(payload?.peerId);
-      if (!Number.isInteger(peerId) || peerId <= 0 || peerId === me.id) return;
+      // peerId 允许等于自己：为"我自己"会话记录已读位置
+      if (!Number.isInteger(peerId) || peerId <= 0) return;
       const last = stmt.lastPrivateMessageId.get(me.id, peerId, peerId, me.id);
       const lastReadId = last?.id || 0;
       if (lastReadId > 0) stmt.upsertRead.run(me.id, `u:${peerId}`, lastReadId);
@@ -212,6 +213,8 @@ function setupChat(io) {
 
     socket.on('typing', (payload) => {
       const to = payload?.to ?? null;
+      // 给自己发消息时无需"正在输入"回显
+      if (to !== null && Number(to) === me.id) return;
       const evt = { from: me.id, nickname: me.nickname, to };
       if (to === null) socket.broadcast.emit('typing', evt);
       else io.to(`user:${Number(to)}`).emit('typing', evt);
