@@ -76,7 +76,7 @@
             </tbody>
           </table>
         </div>
-        <p v-else class="form-error">加载中…</p>
+        <p v-else class="empty-hint">正在加载统计数据…</p>
       </template>
 
       <!-- 文件管理：列表 + 删除 -->
@@ -115,7 +115,10 @@
             </tr>
           </tbody>
         </table>
-        <p v-else-if="!loadingFiles" class="form-error">暂无文件</p>
+        <div v-else-if="!loadingFiles" class="empty-hint">
+          <div class="empty-icon">📁</div>
+          暂无上传文件
+        </div>
       </template>
 
       <p v-if="error" class="form-error">{{ error }}</p>
@@ -124,9 +127,11 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { api, downloadFile } from '../api.js'
 import { state } from '../store.js'
+
+const emit = defineEmits(['close'])
 
 const TABS = { users: '用户管理', stats: '存储统计', files: '文件管理' }
 
@@ -270,5 +275,17 @@ async function removeUser(u) {
   await act(() => api.deleteUser(u.id))
 }
 
-onMounted(refresh)
+// Esc 关闭弹窗
+function onKey(e) {
+  if (e.key === 'Escape') {
+    e.stopPropagation()
+    emit('close')
+  }
+}
+
+onMounted(() => {
+  refresh()
+  window.addEventListener('keydown', onKey)
+})
+onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 </script>
