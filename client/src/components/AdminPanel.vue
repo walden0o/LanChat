@@ -129,6 +129,7 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { api, downloadFile } from '../api.js'
+import { uiConfirm, uiAlert } from '../dialog.js'
 import { state } from '../store.js'
 
 const emit = defineEmits(['close'])
@@ -177,13 +178,17 @@ function fileIcon(mime = '') {
 
 /** 删除文件：连带删除引用它的消息，服务端返回受影响消息数。 */
 async function removeFile(f) {
-  if (!confirm(`确定删除文件「${f.name}」（${fmtSize(f.size)}）？\n聊天记录中的该文件消息也会一并删除。`)) return
+  const ok = await uiConfirm(
+    `确定删除文件「${f.name}」（${fmtSize(f.size)}）？聊天记录中的该文件消息也会一并删除。`,
+    { title: '删除文件', confirmText: '删除', danger: true }
+  )
+  if (!ok) return
   error.value = ''
   try {
     const r = await api.deleteFile(f.id)
     files.value = files.value.filter((x) => x.id !== f.id)
     if (r.deletedMessages > 0) {
-      alert(`已删除文件，同时移除 ${r.deletedMessages} 条相关消息。`)
+      await uiAlert(`已删除文件，同时移除 ${r.deletedMessages} 条相关消息。`)
     }
   } catch (e) {
     error.value = e.message
@@ -225,7 +230,7 @@ async function runCleanup() {
   cleaning.value = true
   try {
     const r = (await api.runCleanup()).result
-    alert(`清理完成：消息 ${r.messages} 条、文件 ${r.files} 个（磁盘 ${r.unlinked}）、死文件消息 ${r.orphanFileMessages} 条`)
+    await uiAlert(`清理完成：消息 ${r.messages} 条、文件 ${r.files} 个（磁盘 ${r.unlinked}）、死文件消息 ${r.orphanFileMessages} 条`)
     await showStats()
   } catch (e) {
     error.value = e.message
@@ -271,7 +276,11 @@ async function act(fn) {
 }
 
 async function removeUser(u) {
-  if (!confirm(`确定删除用户「${u.nickname}（${u.username}）」？其历史消息也会一并删除。`)) return
+  const ok = await uiConfirm(
+    `确定删除用户「${u.nickname}（${u.username}）」？其历史消息也会一并删除。`,
+    { title: '删除用户', confirmText: '删除', danger: true }
+  )
+  if (!ok) return
   await act(() => api.deleteUser(u.id))
 }
 

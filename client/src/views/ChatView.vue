@@ -319,6 +319,7 @@ import {
   groupReadCount,
   othersCount,
 } from '../store.js'
+import { uiConfirm, uiAlert } from '../dialog.js'
 import { api, downloadFile } from '../api.js'
 import AdminPanel from '../components/AdminPanel.vue'
 
@@ -432,7 +433,7 @@ async function send() {
   } catch (e) {
     draft.value = text // 发送失败还原草稿
     autoGrow()
-    alert(e.message)
+    uiAlert(e.message, { title: '发送失败' })
   }
 }
 
@@ -458,7 +459,7 @@ async function onPickFile(e) {
   try {
     await sendFile(file)
   } catch (err) {
-    alert(err.message)
+    uiAlert(err.message, { title: '上传失败' })
   }
 }
 
@@ -537,11 +538,12 @@ function formatTime(s) {
 
 // ---------- 撤回 ----------
 async function onRecall(m) {
-  if (!confirm('确定撤回这条消息？')) return
+  const ok = await uiConfirm('确定撤回这条消息？', { title: '撤回消息', confirmText: '撤回', danger: true })
+  if (!ok) return
   try {
     await recallMessage(m.id)
   } catch (e) {
-    alert(e.message)
+    uiAlert(e.message, { title: '撤回失败' })
   }
 }
 const recallText = (m) => (m.senderId === state.user.id ? '你撤回了一条消息' : `${m.senderNickname} 撤回了一条消息`)

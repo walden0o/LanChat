@@ -1132,3 +1132,47 @@ a:focus-visible,
   word-break: break-all; line-height: 1.4;
   max-width: 320px;
 }
+
+/* ---------- 应用内确认/提示对话框 ---------- */
+.mini-modal {
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 22px 24px 18px;
+  width: min(400px, calc(100vw - 48px));
+  box-shadow: var(--sh-pop);
+  animation: card-in 0.24s var(--ease);
+}
+.mini-modal h4 {
+  margin: 0 0 10px;
+  font-size: 16px;
+  color: var(--ink);
+}
+.mini-modal h4.danger { color: #e64545; }
+.mini-modal-msg {
+  margin: 0 0 18px;
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: var(--ink-2);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.mini-modal-ops { display: flex; justify-content: flex-end; gap: 10px; }
+.mini-btn {
+  padding: 8px 18px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.16s var(--ease);
+}
+.mini-btn:hover { border-color: var(--ink-4); color: var(--ink); }
+.mini-btn.primary {
+  background: linear-gradient(135deg, var(--brand), #3f8ff5);
+  border: none;
+  color: #fff;
+}
+.mini-btn.primary:hover { filter: brightness(1.06); box-shadow: 0 4px 12px rgba(18, 183, 245, 0.35); }
+.mini-btn.primary.danger { background: linear-gradient(135deg, #e64545, #d63838); }
+.mini-btn.primary.danger:hover { box-shadow: 0 4px 12px rgba(230, 69, 69, 0.35); }
