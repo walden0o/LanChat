@@ -40,7 +40,7 @@ function startCleanupJob() {
     const c = cleanup();
     if (c.messages || c.files || c.orphanFileMessages) {
       console.log(
-        `[local-qq] 过期清理：消息 ${c.messages}、文件 ${c.files}（磁盘 ${c.unlinked}）、死文件消息 ${c.orphanFileMessages}`
+        `[lanchat] 过期清理：消息 ${c.messages}、文件 ${c.files}（磁盘 ${c.unlinked}）、死文件消息 ${c.orphanFileMessages}`
       );
     }
   };
@@ -48,7 +48,7 @@ function startCleanupJob() {
   setInterval(run, INTERVAL_MS).unref(); // unref：不阻止进程退出
   const s = { file: getTtlDays('file_ttl_days'), msg: getTtlDays('message_ttl_days') };
   console.log(
-    `[local-qq] 保留策略：文件 ${s.file} 天、消息 ${s.msg} 天，每小时自动清理过期数据（管理员可在面板调整）`
+    `[lanchat] 保留策略：文件 ${s.file} 天、消息 ${s.msg} 天，每小时自动清理过期数据（管理员可在面板调整）`
   );
 }
 

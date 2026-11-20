@@ -1,5 +1,5 @@
 {
-  "name": "local-qq-server",
+  "name": "lanchat-server",
   "version": "0.1.0",
   "private": true,
   "description": "局域网即时通讯工具（服务端 + 静态托管前端）",

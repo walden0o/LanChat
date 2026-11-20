@@ -57,6 +57,6 @@ app.set('io', io);
 startCleanupJob();
 
 server.listen(PORT, HOST, () => {
-  console.log(`[local-qq] 服务已启动: http://${HOST}:${PORT}`);
-  console.log(`[local-qq] 局域网访问: http://<本机IP>:${PORT}`);
+  console.log(`[lanchat] 服务已启动: http://${HOST}:${PORT}`);
+  console.log(`[lanchat] 局域网访问: http://<本机IP>:${PORT}`);
 });
