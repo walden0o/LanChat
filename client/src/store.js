@@ -30,7 +30,7 @@ export const state = reactive({
   readMarks: {},             // 'u:<peer>' -> 对方已读我消息的最大 id（已读回执）
   groupReads: {},            // userId -> 该用户在群聊已读到的最大消息 id
   kickReason: '',
-  uploading: false,
+  maxUploadMb: 0,            // 单文件上传上限（MB），连接时拉取
 })
 
 /** 头像配色：同一用户 id 恒定取同一颜色。 */
@@ -143,6 +143,7 @@ function connectSocket() {
   socket.on('connect', () => {
     state.connected = true
     refreshContacts()
+    loadUploadLimit()
     loadHistory(state.currentKey)
     emitReadUpdate(state.currentKey) // 重连后补报当前会话的已读位置
   })
@@ -328,20 +329,13 @@ export function sendText(text) {
   })
 }
 
-/** 上传文件并作为消息发送。 */
-export async function sendFile(file) {
-  state.uploading = true
+/** 上传并以消息发送文件：见 uploads.js 的上传队列（带进度/取消/重试）。 */
+
+/** 拉取当前单文件上传上限（MB），供发送前预检与界面提示。 */
+export async function loadUploadLimit() {
   try {
-    const meta = await api.uploadFile(file)
-    await new Promise((resolve, reject) => {
-      const to = state.currentKey === 'group' ? null : Number(state.currentKey.slice(2))
-      state.socket.emit('message:send', { to, type: 'file', content: meta }, (ack) => {
-        ack?.error ? reject(new Error(ack.error)) : resolve()
-      })
-    })
-  } finally {
-    state.uploading = false
-  }
+    state.maxUploadMb = (await api.uploadLimit()).maxUploadMb
+  } catch { /* 离线时忽略，发送时服务端仍会兜底校验 */ }
 }
 
 /** 通知当前会话对方"正在输入"。 */

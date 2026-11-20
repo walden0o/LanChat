@@ -1,71 +1,23 @@
 <template>
   <div class="chat-page">
     <div v-if="sideOpen" class="side-scrim" @click="sideOpen = false"></div>
-    <!-- 左侧：个人信息 + 会话列表 -->
-    <aside class="sidebar" :class="{ open: sideOpen }">
-      <div class="me">
-        <div class="avatar" :style="{ background: avatarColor(state.user.id) }">{{ avatarChar }}</div>
-        <div class="me-info">
-          <div class="me-name">
-            {{ state.user.nickname }}
-            <span v-if="state.user.isAdmin" class="badge">管理员</span>
-          </div>
-          <div class="me-status" :class="{ offline: !state.connected }">
-            <i class="status-dot"></i>{{ state.connected ? '在线' : '连接中…' }}
-          </div>
-        </div>
-        <button v-if="state.user.isAdmin" class="icon-btn" title="用户管理" @click="showAdmin = true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="3" />
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-          </svg>
-        </button>
-        <button class="icon-btn" title="退出登录" @click="logout()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 2v8" />
-            <path d="M18.4 6.6a9 9 0 1 1-12.8 0" />
-          </svg>
-        </button>
-      </div>
 
-      <div class="side-search">
-        <div class="side-search-wrap">
-          <input
-            v-model="convQ"
-            placeholder="搜索会话…"
-            @keydown.escape="convQ = ''"
-          />
-          <button v-if="convQ" class="side-search-clear" title="清空" @click="convQ = ''">✕</button>
-        </div>
-      </div>
+    <!-- 最左侧：QQ 窄导航栏 -->
+    <NavRail
+      v-model:nav-tab="navTab"
+      @open-admin="showAdmin = true"
+      @logout="onLogout"
+    />
 
-      <ul class="conv-list">
-        <li
-          v-for="c in filteredConversations"
-          :key="c.key"
-          :class="{ active: c.key === state.currentKey }"
-          @click="onSelect(c.key)"
-        >
-          <div class="conv-avatar" :style="{ background: c.color }">
-            {{ c.name.slice(0, 1).toUpperCase() }}
-            <i class="conv-dot" :class="{ on: c.online }"></i>
-          </div>
-          <div class="conv-main">
-            <div class="conv-top">
-              <span class="conv-name" v-html="highlight(c.name)"></span>
-              <span class="conv-time">{{ c.time }}</span>
-            </div>
-            <div class="conv-bottom">
-              <span class="conv-preview" v-html="highlight(c.preview || '暂无消息')"></span>
-              <span v-if="c.unread" class="conv-unread">{{ c.unread > 99 ? '99+' : c.unread }}</span>
-            </div>
-          </div>
-        </li>
-        <li v-if="convQ && !filteredConversations.length" class="conv-empty">没有匹配的会话</li>
-      </ul>
-    </aside>
+    <!-- 中间：浅色会话 / 联系人列表 -->
+    <ChatSidebar
+      :open="sideOpen"
+      :nav-tab="navTab"
+      @select="onSelect"
+      @open-chats="navTab = 'chats'"
+    />
 
-    <!-- 右侧：消息区 + 输入区（支持拖拽文件到此处直接发送） -->
+    <!-- 右侧：消息区 + 上传队列 + 输入区（支持拖拽/粘贴文件直接发送） -->
     <main
       class="main"
       @dragenter.prevent="onDragEnter"
@@ -82,9 +34,10 @@
             <line x1="12" y1="3" x2="12" y2="15" />
           </svg>
           <p>松开鼠标，发送到{{ state.currentKey === 'group' ? '群聊' : '当前会话' }}</p>
-          <span v-if="maxUploadMb" class="drop-limit">单文件上限 {{ maxUploadMb }} MB</span>
+          <span v-if="state.maxUploadMb" class="drop-limit">单文件上限 {{ formatLimit(state.maxUploadMb) }}</span>
         </div>
       </div>
+
       <header class="chat-header">
         <button class="icon-btn side-toggle" title="会话列表" @click="sideOpen = true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
@@ -138,7 +91,7 @@
                 @click="jumpToResult(r)"
               >
                 <span class="search-meta">{{ r.senderNickname }} · {{ r.createdAt.slice(5, 16) }}</span>
-                <span class="search-snippet" v-html="highlight(r.snippet)"></span>
+                <span class="search-snippet" v-html="highlight(r.snippet, searchQ)"></span>
               </div>
             </template>
           </div>
@@ -151,44 +104,75 @@
         <div v-if="!currentMessages.length" class="msg-empty">
           <div class="msg-empty-icon">💬</div>
           <p>暂无消息，来聊第一句吧</p>
+          <span class="msg-empty-sub">支持拖拽或 Ctrl+V 粘贴图片/文件发送</span>
         </div>
+
         <template v-for="(m, i) in currentMessages" :key="m.id">
           <!-- 按天分日期分隔条 -->
           <div v-if="showDate(i)" class="date-sep"><span>{{ dateLabel(m.createdAt) }}</span></div>
+
           <div
             class="msg-row"
-            :class="{ mine: m.senderId === state.user.id, flash: flashId === m.id }"
+            :class="{
+              mine: m.senderId === state.user.id,
+              grouped: isGrouped(i),
+              flash: flashId === m.id,
+            }"
             :data-mid="m.id"
           >
-            <div class="msg-avatar" :style="{ background: avatarColor(m.senderId) }">
+            <div
+              class="msg-avatar"
+              :style="{ background: avatarColor(m.senderId) }"
+            >
               {{ (m.senderNickname || '?').slice(0, 1).toUpperCase() }}
             </div>
+
             <div class="msg-body">
-              <div class="msg-meta">
-                {{ m.senderNickname }} · {{ formatTime(m.createdAt) }}
-                <button
-                  v-if="canRecall(m)"
-                  class="recall-btn"
-                  title="撤回"
-                  @click="onRecall(m)"
-                >撤回</button>
+              <div v-if="!isGrouped(i)" class="msg-meta">
+                <span class="msg-sender">{{ m.senderNickname }}</span>
+                <span class="msg-time">{{ formatTime(m.createdAt) }}</span>
               </div>
+
               <div v-if="m.revoked" class="bubble revoked">{{ recallText(m) }}</div>
-              <template v-else>
+
+              <div v-else class="msg-content-wrap">
+                <!-- 消息悬停操作条 -->
+                <div class="msg-actions">
+                  <button
+                    v-if="m.type === 'text'"
+                    class="msg-act-btn"
+                    title="复制"
+                    @click="copyText(m.content)"
+                  >复制</button>
+                  <button
+                    v-else
+                    class="msg-act-btn"
+                    title="下载"
+                    @click="downloadFile(m.content.fileId, m.content.name)"
+                  >下载</button>
+                  <button
+                    v-if="canRecall(m)"
+                    class="msg-act-btn danger"
+                    title="撤回"
+                    @click="onRecall(m)"
+                  >撤回</button>
+                </div>
+
                 <div v-if="m.type === 'text'" class="bubble">{{ m.content }}</div>
+
                 <template v-else>
-                  <!-- 图片/视频内联预览，其余文件显示下载卡片 -->
+                  <!-- 图片/视频内联预览，其余文件显示增强文件卡片 -->
                   <img
                     v-if="isImage(m.content)"
                     class="msg-img"
-                    :src="mediaUrl(m.content)"
+                    :src="fileUrl(m.content.fileId)"
                     :alt="m.content.name"
-                    @click="previewUrl = mediaUrl(m.content)"
+                    @click="previewUrl = fileUrl(m.content.fileId)"
                   />
                   <video
                     v-else-if="isVideo(m.content)"
                     class="msg-video"
-                    :src="mediaUrl(m.content)"
+                    :src="fileUrl(m.content.fileId)"
                     controls
                     preload="metadata"
                   ></video>
@@ -197,11 +181,18 @@
                     class="bubble file-bubble"
                     @click="isText(m.content) ? openTextPreview(m.content) : downloadFile(m.content.fileId, m.content.name)"
                   >
-                    <span class="file-icon">{{ isText(m.content) ? '📝' : '📄' }}</span>
+                    <span
+                      class="file-icon-box"
+                      :style="{ background: fileKind(m.content.mime, m.content.name).color + '1a' }"
+                    >
+                      {{ fileKind(m.content.mime, m.content.name).icon }}
+                    </span>
                     <span class="file-info">
                       <span class="file-name">{{ m.content.name }}</span>
-                      <span class="file-size">
-                        {{ formatSize(m.content.size) }} · {{ isText(m.content) ? '点击预览' : '点击下载' }}
+                      <span class="file-meta-row">
+                        <span class="file-ext">{{ fileKind(m.content.mime, m.content.name).label }}</span>
+                        <span class="file-size">{{ formatSize(m.content.size) }}</span>
+                        <span class="file-hint">{{ isText(m.content) ? '点击预览' : '点击下载' }}</span>
                       </span>
                     </span>
                   </div>
@@ -210,7 +201,8 @@
                     <a class="media-dl" @click="downloadFile(m.content.fileId, m.content.name)">下载</a>
                   </div>
                 </template>
-              </template>
+              </div>
+
               <!-- 私聊已读回执：只标在自己发出的最后一条消息上 -->
               <div
                 v-if="isPrivate && m.senderId === state.user.id && m.id === lastOwnId"
@@ -238,7 +230,7 @@
           v-if="showScrollDown"
           class="scroll-down"
           title="回到最新消息"
-          @click="scrollToBottom()"
+          @click="scrollToBottom(true)"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <line x1="12" y1="5" x2="12" y2="19" />
@@ -247,6 +239,9 @@
           <span v-if="newCount" class="new-count">{{ newCount > 99 ? '99+' : newCount }}</span>
         </button>
       </transition>
+
+      <!-- 大文件上传队列面板 -->
+      <UploadQueue />
 
       <footer class="input-area">
         <!-- 表情选择面板 -->
@@ -260,37 +255,47 @@
             @click="insertEmoji(e)"
           >{{ e }}</button>
         </div>
-        <div class="input-row">
-          <div class="input-toolbar">
-            <button class="icon-btn" :title="`发送文件（单文件上限 ${maxUploadMb || '—'} MB）`" :disabled="state.uploading" @click="fileInput.click()">
-              {{ state.uploading ? '⏳' : '📎' }}
-            </button>
-            <button class="icon-btn" title="表情" @click="showEmoji = !showEmoji">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10" />
-                <path d="M8 14s1.5 2 4 2 4-2 4-2" />
-                <line x1="9" y1="9" x2="9.01" y2="9" />
-                <line x1="15" y1="9" x2="15.01" y2="9" />
-              </svg>
-            </button>
-            <input ref="fileInput" type="file" hidden @change="onPickFile" />
-          </div>
-          <textarea
-            ref="draftInput"
-            v-model="draft"
-            rows="1"
-            placeholder="输入消息，Enter 发送，Shift+Enter 换行"
-            @keydown.enter.exact.prevent="send"
-            @input="onDraftInput"
-            @focus="onDraftFocus"
-          ></textarea>
-          <button class="send-btn" :disabled="!draft.trim()" @click="send">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="22" y1="2" x2="11" y2="13" />
-              <polygon points="22 2 15 22 11 13 2 9 22 2" />
+
+        <!-- QQ 经典输入区：上方工具栏 + 中间输入 + 右下角发送按钮 -->
+        <div class="composer-bar">
+          <button class="icon-btn" title="表情" @click="showEmoji = !showEmoji">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+              <line x1="9" y1="9" x2="9.01" y2="9" />
+              <line x1="15" y1="9" x2="15.01" y2="9" />
             </svg>
-            <span class="send-label">发送</span>
           </button>
+          <button
+            class="icon-btn"
+            :title="`发送文件（支持多选，单文件上限 ${formatLimit(state.maxUploadMb)}）`"
+            @click="fileInput.click()"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+            </svg>
+          </button>
+          <input ref="fileInput" type="file" multiple hidden @change="onPickFile" />
+          <span v-if="state.maxUploadMb" class="composer-limit">
+            支持拖拽 / Ctrl+V 粘贴文件 · 单文件上限 {{ formatLimit(state.maxUploadMb) }}
+          </span>
+        </div>
+
+        <textarea
+          ref="draftInput"
+          v-model="draft"
+          class="composer-input"
+          rows="3"
+          placeholder="输入消息…"
+          @keydown.enter.exact.prevent="send"
+          @input="onDraftInput"
+          @focus="onDraftFocus"
+          @paste="onPaste"
+        ></textarea>
+
+        <div class="composer-foot">
+          <span class="composer-hint">Enter 发送 · Shift+Enter 换行</span>
+          <button class="send-btn" :disabled="!draft.trim()" @click="send">发送</button>
         </div>
       </footer>
     </main>
@@ -307,7 +312,7 @@
           <h3 class="text-modal-title">{{ textPreview.name }}</h3>
           <div class="text-modal-ops">
             <button class="dl-btn" @click="downloadFile(textPreview.fileId, textPreview.name)">下载</button>
-            <button class="icon-btn" @click="textPreview = null">✕</button>
+            <button class="icon-btn" title="关闭 (Esc)" @click="textPreview = null">✕</button>
           </div>
         </div>
         <pre class="text-preview">{{ textPreview.text }}</pre>
@@ -324,10 +329,8 @@ import {
   state,
   currentMessages,
   currentTitle,
-  conversationList,
   selectConversation,
   sendText,
-  sendFile,
   sendTyping,
   logout,
   recallMessage,
@@ -338,14 +341,31 @@ import {
   othersCount,
 } from '../store.js'
 import { uiConfirm, uiAlert } from '../dialog.js'
-import { api, downloadFile } from '../api.js'
+import { toast } from '../toast.js'
+import { api, fileUrl, downloadFile } from '../api.js'
+import { enqueueFiles, cancelAllUploads } from '../uploads.js'
+import {
+  formatSize,
+  formatLimit,
+  formatTime,
+  dateLabel,
+  toMs,
+  isImage,
+  isVideo,
+  isText,
+  fileKind,
+  highlight,
+} from '../utils.js'
 import AdminPanel from '../components/AdminPanel.vue'
+import NavRail from '../components/NavRail.vue'
+import ChatSidebar from '../components/ChatSidebar.vue'
+import UploadQueue from '../components/UploadQueue.vue'
 
 const draft = ref('')
+const navTab = ref('chats')
 const showAdmin = ref(false)
 const showEmoji = ref(false)
 const sideOpen = ref(false) // 移动端侧栏抽屉
-const convQ = ref('')
 
 // 常用表情（纯文本插入，无需后端支持）
 const EMOJIS = [
@@ -357,41 +377,25 @@ const EMOJIS = [
 function insertEmoji(e) {
   draft.value += e
   showEmoji.value = false
+  draftInput.value?.focus()
 }
+
 const msgBox = ref(null)
 const fileInput = ref(null)
 const draftInput = ref(null)
 const searchInput = ref(null)
 const typingText = ref('')
+const previewUrl = ref('')
 
-// ---------- 会话列表本地筛选 ----------
 function onSelect(key) {
   selectConversation(key)
   sideOpen.value = false
 }
 
-const filteredConversations = computed(() => {
-  const q = convQ.value.trim().toLowerCase()
-  if (!q) return conversationList.value
-  return conversationList.value.filter(
-    (c) =>
-      c.name.toLowerCase().includes(q) ||
-      (c.preview || '').toLowerCase().includes(q)
-  )
-})
-
-/** 转义 HTML 后再包 <mark>，避免 v-html 注入。 */
-function highlight(text) {
-  const raw = String(text ?? '')
-  const q = (convQ.value.trim() || searchQ.value.trim()) || ''
-  const safe = raw.replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch])
-  if (!q) return safe
-  const esc = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  return safe.replace(new RegExp(esc, 'gi'), (m) => `<mark>${m}</mark>`)
+function onLogout() {
+  cancelAllUploads()
+  logout()
 }
-
-const avatarChar = (state.user?.nickname || '?').slice(0, 1).toUpperCase()
-const previewUrl = ref('')
 
 // 头部副标题：群聊显示在线人数，私聊显示对方在线状态
 const headerSub = computed(() => {
@@ -399,25 +403,6 @@ const headerSub = computed(() => {
   const peerId = Number(state.currentKey.slice(2))
   return state.onlineIds.has(peerId) ? '在线' : '离线'
 })
-
-// <img>/<video> 无法带 Authorization 头，通过 ?token= 传递凭证
-const mediaUrl = (c) => `/api/files/${c.fileId}?token=${encodeURIComponent(state.token)}`
-const isImage = (c) => /^image\//.test(c?.mime || '') && c.mime !== 'image/svg+xml'
-const isVideo = (c) => /^video\//.test(c?.mime || '')
-
-// 文本文件判定：mime 不可靠（.md 常是 octet-stream），扩展名做兜底
-const TEXT_MIMES = new Set([
-  'application/json',
-  'application/xml',
-  'application/javascript',
-  'application/x-yaml',
-  'application/toml',
-  'application/x-sh',
-])
-const TEXT_EXT_RE =
-  /\.(txt|md|log|json|js|mjs|ts|jsx|tsx|vue|css|scss|less|html?|xml|ya?ml|toml|ini|cfg|conf|env|sh|bat|py|java|c|h|cpp|hpp|cc|go|rs|rb|php|sql|csv|diff)$/i
-const isText = (c) =>
-  /^text\//.test(c?.mime || '') || TEXT_MIMES.has(c?.mime) || TEXT_EXT_RE.test(c?.name || '')
 
 // 文本预览上限：超过则走 HTTP Range 只拉前 256KB
 const TEXT_PREVIEW_MAX = 256 * 1024
@@ -428,7 +413,7 @@ async function openTextPreview(c) {
   try {
     const truncated = c.size > TEXT_PREVIEW_MAX
     const headers = truncated ? { Range: `bytes=0-${TEXT_PREVIEW_MAX - 1}` } : {}
-    const res = await fetch(mediaUrl(c), { headers })
+    const res = await fetch(fileUrl(c.fileId), { headers })
     if (!res.ok) throw new Error()
     const buf = await res.arrayBuffer()
     // 截断处可能切坏 UTF-8 字符，去掉末尾的替换符
@@ -437,6 +422,15 @@ async function openTextPreview(c) {
     textPreview.value = { ...textPreview.value, text }
   } catch {
     textPreview.value = { ...textPreview.value, text: '预览加载失败，请尝试下载查看' }
+  }
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text)
+    toast('已复制到剪贴板', 'success')
+  } catch {
+    toast('复制失败，请手动选择文本', 'error')
   }
 }
 
@@ -470,57 +464,49 @@ function onDraftFocus() {
   autoGrow()
 }
 
-async function onPickFile(e) {
+// ---------- 文件选择 / 拖拽 / 粘贴上传 ----------
+function onPickFile(e) {
   const files = [...(e.target.files || [])]
   e.target.value = ''
-  await sendFiles(files)
+  sendFiles(files)
 }
 
-// ---------- 文件拖拽上传 ----------
-// dragleave 在经过子元素时会频繁触发，用"离开目标是否仍在容器内"判断真离开
+function onPaste(e) {
+  const files = [...(e.clipboardData?.files || [])]
+  if (!files.length) return
+  e.preventDefault()
+  sendFiles(files)
+}
+
 const dragOver = ref(false)
 const hasFiles = (e) => e.dataTransfer?.types?.includes('Files')
-
-function onDragEnter(e) {
-  if (hasFiles(e)) dragOver.value = true
-}
-function onDragOverEvt(e) {
-  if (hasFiles(e)) dragOver.value = true
-}
+function onDragEnter(e) { if (hasFiles(e)) dragOver.value = true }
+function onDragOverEvt(e) { if (hasFiles(e)) dragOver.value = true }
 function onDragLeave(e) {
   const to = e.relatedTarget
   if (!to || !e.currentTarget.contains(to)) dragOver.value = false
 }
-async function onDrop(e) {
+function onDrop(e) {
   dragOver.value = false
   const files = [...(e.dataTransfer?.files || [])]
-  if (files.length) await sendFiles(files)
+  if (files.length) sendFiles(files)
 }
 
-/** 逐个上传并发送（支持一次拖入多个文件）；超限文件提前拦截。 */
-const maxUploadMb = ref(0)
-async function sendFiles(files) {
+/** 预检大小后入队上传（支持同时多选/拖入多个文件）。 */
+function sendFiles(files) {
+  const limitBytes = state.maxUploadMb ? state.maxUploadMb * 1024 * 1024 : 0
+  const ok = []
   for (const file of files) {
-    if (maxUploadMb.value && file.size > maxUploadMb.value * 1024 * 1024) {
-      uiAlert(`${file.name} 超过单文件上限（${maxUploadMb.value} MB）`, { title: '无法发送' })
+    if (limitBytes && file.size > limitBytes) {
+      uiAlert(`${file.name} 超过单文件上限（${formatLimit(state.maxUploadMb)}）`, { title: '无法发送' })
       continue
     }
-    try {
-      await sendFile(file)
-    } catch (err) {
-      uiAlert(`${file.name}：${err.message}`, { title: '上传失败' })
-      break
-    }
+    ok.push(file)
   }
+  if (ok.length) enqueueFiles(ok)
 }
 
-async function loadUploadLimit() {
-  try {
-    maxUploadMb.value = (await api.uploadLimit()).maxUploadMb
-  } catch { /* 离线时忽略，发送时服务端仍会兜底校验 */ }
-}
-
-// 新消息到达时，若已在底部附近则自动滚到底
+// ---------- 消息滚动与分组 ----------
 let stickBottom = true
 const showScrollDown = ref(false)
 const newCount = ref(0)
@@ -553,7 +539,6 @@ watch(
     }
   }
 )
-// 切换会话时重置：直接贴底
 watch(
   () => state.currentKey,
   async () => {
@@ -565,7 +550,7 @@ watch(
   }
 )
 
-// "正在输入"提示：监听 store.typing 中当前会话的变化
+// "正在输入"提示
 watch(
   () => state.typing[state.currentKey],
   (nick) => {
@@ -573,24 +558,20 @@ watch(
   }
 )
 
-// ---------- 日期分隔 ----------
 function showDate(i) {
   const arr = currentMessages.value
   if (i === 0) return true
   return arr[i].createdAt.slice(0, 10) !== arr[i - 1].createdAt.slice(0, 10)
 }
-function dateLabel(s) {
-  const day = s.slice(0, 10)
-  const today = new Date().toLocaleDateString('sv')
-  const yesterday = new Date(Date.now() - 864e5).toLocaleDateString('sv')
-  if (day === today) return '今天'
-  if (day === yesterday) return '昨天'
-  return day
-}
-function formatTime(s) {
-  if (!s) return ''
-  const today = new Date().toLocaleDateString('sv')
-  return s.slice(0, 10) === today ? s.slice(11, 16) : s.slice(5, 16)
+
+/** 同一人 2 分钟内连续发的消息折叠头像与昵称，减少视觉重复。 */
+function isGrouped(i) {
+  if (i === 0 || showDate(i)) return false
+  const arr = currentMessages.value
+  const cur = arr[i]
+  const prev = arr[i - 1]
+  if (cur.senderId !== prev.senderId) return false
+  return toMs(cur.createdAt) - toMs(prev.createdAt) < 2 * 60 * 1000
 }
 
 // ---------- 撤回 ----------
@@ -637,9 +618,7 @@ function onSearch() {
     }
   }, 300)
 }
-function onSearchFocus() {
-  if (searchQ.value) onSearch()
-}
+function onSearchFocus() { if (searchQ.value) onSearch() }
 function closeSearch() {
   searchQ.value = ''
   searchResults.value = null
@@ -656,7 +635,6 @@ function enterSearch() {
   jumpToResult(list[searchIdx.value >= 0 ? searchIdx.value : 0])
 }
 
-// 跳转后高亮定位到的那条消息，避免"跳过去却找不到"
 const flashId = ref(0)
 let flashTimer = null
 function flashMessage(id) {
@@ -668,53 +646,41 @@ function flashMessage(id) {
   })
 }
 
-/** 点击搜索结果：跳转到对应会话并高亮该消息。 */
 function jumpToResult(r) {
   const key = r.receiverId === null ? 'group' : `u:${r.senderId === state.user.id ? r.receiverId : r.senderId}`
   const sameKey = key === state.currentKey
   selectConversation(key)
   closeSearch()
   sideOpen.value = false
-  if (sameKey) {
-    // 同会话：直接滚动到该条
-    nextTick(() => {
-      const row = msgBox.value?.querySelector(`[data-mid="${r.id}"]`)
-      if (row) {
-        row.scrollIntoView({ block: 'center', behavior: 'smooth' })
-        stickBottom = false
-        showScrollDown.value = true
-      }
-      flashMessage(r.id)
-    })
-  } else {
-    // 跨会话：等历史加载完再定位
-    setTimeout(() => {
-      const row = msgBox.value?.querySelector(`[data-mid="${r.id}"]`)
-      if (row) {
-        row.scrollIntoView({ block: 'center', behavior: 'smooth' })
-        stickBottom = false
-        showScrollDown.value = true
-      }
-      flashMessage(r.id)
-    }, 260)
+  const scrollTarget = () => {
+    const row = msgBox.value?.querySelector(`[data-mid="${r.id}"]`)
+    if (row) {
+      row.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      stickBottom = false
+      showScrollDown.value = true
+    }
+    flashMessage(r.id)
   }
+  if (sameKey) nextTick(scrollTarget)
+  else setTimeout(scrollTarget, 260)
 }
 
-// "/" 快速聚焦搜索框，Esc 退出
+// "/" 快速聚焦搜索框，Esc 依次关闭预览/表情/搜索
 function onGlobalKey(e) {
   const tag = e.target?.tagName
   const typing = tag === 'INPUT' || tag === 'TEXTAREA' || e.target?.isContentEditable
   if (e.key === '/' && !typing) {
     e.preventDefault()
     searchInput.value?.focus()
-  } else if (e.key === 'Escape' && searchResults.value) {
-    closeSearch()
+  } else if (e.key === 'Escape') {
+    if (previewUrl.value) previewUrl.value = ''
+    else if (textPreview.value) textPreview.value = null
+    else if (showEmoji.value) showEmoji.value = false
+    else if (searchResults.value) closeSearch()
   }
 }
 
-// 用户首次交互后请求桌面通知授权（浏览器要求交互后才能弹授权框）
 onMounted(() => {
-  loadUploadLimit()
   const once = () => {
     requestNotifyPermission()
     window.removeEventListener('click', once)
@@ -727,10 +693,4 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', onGlobalKey)
   clearTimeout(flashTimer)
 })
-function formatSize(n) {
-  if (n < 1024) return `${n} B`
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
-  if (n < 1024 * 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1)} MB`
-  return `${(n / 1024 / 1024 / 1024).toFixed(2)} GB`
-}
 </script>

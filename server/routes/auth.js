@@ -12,7 +12,7 @@ const fs = require('fs');
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { db, stmt, getStorageSettings, DATA_DIR } = require('../db');
+const { db, stmt, getStorageSettings, DATA_DIR, MAX_UPLOAD_HARD_CAP_MB } = require('../db');
 
 /** 上传目录（与 routes/files.js 保持一致）。 */
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, '..', '..', 'uploads');
@@ -240,12 +240,22 @@ router.get('/stats', requireAuth, requireAdmin, (req, res) => {
       /* 文件可能不存在 */
     }
   }
+  // 上传目录所在分区容量（大文件场景下管理员需关注剩余空间）
+  let disk = null;
+  try {
+    fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+    const s = fs.statfsSync(UPLOAD_DIR);
+    disk = { freeBytes: s.bavail * s.bsize, totalBytes: s.blocks * s.bsize };
+  } catch {
+    /* 平台不支持 statfs 时不返回 */
+  }
   res.json({
     stats: {
       messageCount: stmt.countMessages.get().n,
       fileCount: stmt.fileStats.get().n,
       fileBytes: stmt.fileStats.get().bytes,
       dbBytes,
+      disk,
       byUser: stmt.filesByUser.all(),
     },
   });
@@ -272,8 +282,8 @@ router.post('/storage-settings', requireAuth, requireAdmin, (req, res) => {
   const applyUploadMb = (v) => {
     if (v === undefined || v === null || v === '') return;
     const n = Number(v);
-    if (!Number.isInteger(n) || n < 1 || n > 2048) {
-      throw new Error('上传上限需为 1-2048 的整数（MB）');
+    if (!Number.isInteger(n) || n < 1 || n > MAX_UPLOAD_HARD_CAP_MB) {
+      throw new Error(`上传上限需为 1-${MAX_UPLOAD_HARD_CAP_MB} 的整数（MB）`);
     }
     stmt.setSetting.run('max_upload_mb', String(n));
   };

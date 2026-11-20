@@ -120,11 +120,13 @@ async function upload(token, name, content) {
   assert(f3.fileId, '删除功能不应影响上传');
   await req(`/api/files/${f3.fileId}`, { method: 'DELETE', token: admin.token });
 
-  // ---- 上传大小上限（管理员可设置，运行时生效） ----
+  // ---- 上传大小上限（管理员可设置，运行时生效，默认 20GB） ----
   const limit0 = (await req('/api/files/limit', { token: member.token })).data;
-  assert(limit0.maxUploadMb === 500, '默认上限应为 500MB: ' + JSON.stringify(limit0));
+  assert(limit0.maxUploadMb === 20480, '默认上限应为 20480MB (20GB): ' + JSON.stringify(limit0));
   const badSet = await req('/api/storage-settings', { method: 'POST', token: admin.token, body: { maxUploadMb: 0 } });
   assert(badSet.status === 400, '非法上限（0）应被拒绝');
+  const overCap = await req('/api/storage-settings', { method: 'POST', token: admin.token, body: { maxUploadMb: 20481 } });
+  assert(overCap.status === 400, '超过硬顶（20481MB）应被拒绝');
   const denied = await req('/api/storage-settings', { method: 'POST', token: member.token, body: { maxUploadMb: 1 } });
   assert(denied.status === 403, '非管理员不能改上限');
   const set1 = (await req('/api/storage-settings', { method: 'POST', token: admin.token, body: { maxUploadMb: 1 } })).data;
@@ -135,7 +137,7 @@ async function upload(token, name, content) {
   assert(tooBig.error && /上限/.test(tooBig.error), '超限上传应被拒绝: ' + JSON.stringify(tooBig));
   const okSmall = await upload(admin.token, '小文件.txt', 'ok');
   assert(okSmall.fileId, '限内上传仍应成功');
-  await req('/api/storage-settings', { method: 'POST', token: admin.token, body: { maxUploadMb: 500 } });
+  await req('/api/storage-settings', { method: 'POST', token: admin.token, body: { maxUploadMb: 20480 } });
 
   sa.disconnect();
   sm.disconnect();

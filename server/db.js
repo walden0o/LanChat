@@ -207,9 +207,9 @@ function getTtlDays(key) {
   return Number.isInteger(n) && n >= 1 && n <= 3650 ? n : DEFAULT_TTL_DAYS;
 }
 
-/** 单文件上传大小上限（MB）：默认取环境变量，管理员可通过 settings 表在运行时覆盖。 */
-const DEFAULT_MAX_UPLOAD_MB = Math.min(Number(process.env.MAX_FILE_SIZE_MB) || 500, 2048);
-const MAX_UPLOAD_HARD_CAP_MB = 2048;
+/** 单文件上传大小上限（MB）：默认 20GB，可用环境变量覆盖，管理员可通过 settings 表在运行时覆盖。 */
+const MAX_UPLOAD_HARD_CAP_MB = 20480; // 20GB 硬顶
+const DEFAULT_MAX_UPLOAD_MB = Math.min(Number(process.env.MAX_FILE_SIZE_MB) || MAX_UPLOAD_HARD_CAP_MB, MAX_UPLOAD_HARD_CAP_MB);
 
 /** 当前生效的上传上限（MB）。 */
 function getMaxUploadMb() {
@@ -226,7 +226,17 @@ function getStorageSettings() {
     defaultTtlDays: DEFAULT_TTL_DAYS,
     maxUploadMb: getMaxUploadMb(),
     defaultMaxUploadMb: DEFAULT_MAX_UPLOAD_MB,
+    maxUploadCapMb: MAX_UPLOAD_HARD_CAP_MB,
   };
 }
 
-module.exports = { db, stmt, DATA_DIR, TTL_DAYS: DEFAULT_TTL_DAYS, getTtlDays, getStorageSettings, getMaxUploadMb };
+module.exports = {
+  db,
+  stmt,
+  DATA_DIR,
+  TTL_DAYS: DEFAULT_TTL_DAYS,
+  getTtlDays,
+  getStorageSettings,
+  getMaxUploadMb,
+  MAX_UPLOAD_HARD_CAP_MB,
+};

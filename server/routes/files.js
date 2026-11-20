@@ -15,7 +15,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const express = require('express');
 const multer = require('multer');
-const { stmt, getMaxUploadMb } = require('../db');
+const { stmt, getMaxUploadMb, MAX_UPLOAD_HARD_CAP_MB } = require('../db');
 const { requireAuth, verifyToken } = require('./auth');
 
 /** 可安全内联预览的类型；SVG 可执行脚本，必须排除。 */
@@ -39,12 +39,31 @@ const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, '..', '..', 'u
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 /**
- * 单文件大小上限（MB）：管理员可在存储设置中运行时调整（1-2048）。
- * multer 的 limits 在构造时固定，这里用 2048MB 硬顶作兜底，
+ * 单文件大小上限（MB）：管理员可在存储设置中运行时调整（1-20480，即最高 20GB）。
+ * multer 的 limits 在构造时固定，这里用 20GB 硬顶作兜底，
  * 实际上限在路由内按当前设置动态校验（Content-Length 预检 + 落盘后复核）。
  */
 const limitBytes = () => getMaxUploadMb() * 1024 * 1024;
-const HARD_CAP = 2048 * 1024 * 1024;
+const HARD_CAP = MAX_UPLOAD_HARD_CAP_MB * 1024 * 1024;
+
+/** 上限文案：≥1024MB 显示为 GB。 */
+function limitText() {
+  const mb = getMaxUploadMb();
+  return mb >= 1024 ? `${+(mb / 1024).toFixed(2)} GB` : `${mb} MB`;
+}
+
+/** 写入后至少保留的磁盘余量，避免把磁盘写满拖垮数据库与系统。 */
+const DISK_RESERVE_BYTES = 1024 * 1024 * 1024;
+
+/** 上传目录所在分区的可用字节数；平台不支持时返回 Infinity（跳过检查）。 */
+function freeDiskBytes() {
+  try {
+    const s = fs.statfsSync(UPLOAD_DIR);
+    return s.bavail * s.bsize;
+  } catch {
+    return Infinity;
+  }
+}
 
 const storage = multer.diskStorage({
   destination: UPLOAD_DIR,
@@ -62,17 +81,25 @@ router.get('/limit', requireAuth, (req, res) => {
   res.json({ maxUploadMb: getMaxUploadMb() });
 });
 
-/** Content-Length 预检：超限直接拒绝，不落盘。 */
+/** Content-Length 预检：超限或磁盘空间不足直接拒绝，不落盘。 */
 router.post('/', requireAuth, (req, res, next) => {
   const declared = Number(req.headers['content-length']);
   if (Number.isFinite(declared) && declared > limitBytes() + 64 * 1024) {
-    return res.status(413).json({ error: `文件超过大小上限（${getMaxUploadMb()} MB）` });
+    return res.status(413).json({ error: `文件超过大小上限（${limitText()}）` });
   }
+  if (Number.isFinite(declared) && declared + DISK_RESERVE_BYTES > freeDiskBytes()) {
+    return res.status(507).json({ error: '服务器磁盘空间不足，请联系管理员清理后再试' });
+  }
+  // 客户端中途取消/断网（请求体未收完）：兜底删除可能残留的临时文件
+  req.on('close', () => {
+    if (!req.complete && req.file?.path) fs.unlink(req.file.path, () => {});
+  });
   uploadMiddleware(req, res, (err) => {
     if (err) {
-      const msg = err.code === 'LIMIT_FILE_SIZE' ? `文件超过大小上限（${getMaxUploadMb()} MB）` : '上传失败';
+      const msg = err.code === 'LIMIT_FILE_SIZE' ? `文件超过大小上限（${limitText()}）` : '上传失败';
       if (req.file?.path) fs.unlink(req.file.path, () => {});
-      return res.status(413).json({ error: msg });
+      if (res.headersSent || req.destroyed) return;
+      return res.status(err.code === 'LIMIT_FILE_SIZE' ? 413 : 400).json({ error: msg });
     }
     next();
   });
@@ -85,7 +112,7 @@ router.post('/', (req, res) => {
   // 复核实际大小（无 Content-Length 的分块请求在此拦截），超限删除临时文件
   if (req.file.size > limitBytes()) {
     fs.unlink(req.file.path, () => {});
-    return res.status(413).json({ error: `文件超过大小上限（${getMaxUploadMb()} MB）` });
+    return res.status(413).json({ error: `文件超过大小上限（${limitText()}）` });
   }
   // multer 对 originalname 按 latin1 解码，中文文件名需转回 utf8
   const originalName = Buffer.from(req.file.originalname, 'latin1').toString('utf8');

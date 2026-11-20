@@ -43,6 +43,10 @@ if (fs.existsSync(CLIENT_DIST)) {
 }
 
 const server = http.createServer(app);
+// Node 18+ 默认 requestTimeout=300s，会掐断大文件（最高 20GB）的慢速上传；
+// 局域网内部工具，关闭整请求超时，仅保留请求头超时防慢速攻击。
+server.requestTimeout = 0;
+server.headersTimeout = 60 * 1000;
 const io = new Server(server, {
   // 消息主体很小，调大容忍度即可；文件走 HTTP 上传
   maxHttpBufferSize: 1e6,
