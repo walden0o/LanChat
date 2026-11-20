@@ -17,7 +17,7 @@ const { db, stmt, getStorageSettings, DATA_DIR, MAX_UPLOAD_HARD_CAP_MB } = requi
 /** 上传目录（与 routes/files.js 保持一致）。 */
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, '..', '..', 'uploads');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'local-qq-dev-secret-change-me';
+const JWT_SECRET = process.env.JWT_SECRET || 'lanchat-dev-secret-change-me';
 const TOKEN_TTL = process.env.TOKEN_TTL || '7d';
 
 const router = express.Router();
@@ -231,7 +231,7 @@ function makeSnippet(content, q) {
 // ---------- 存储统计（管理员）----------
 
 router.get('/stats', requireAuth, requireAdmin, (req, res) => {
-  const dbFile = path.join(DATA_DIR, 'local-qq.db');
+  const dbFile = path.join(DATA_DIR, 'lanchat.db');
   let dbBytes = 0;
   for (const suffix of ['', '-wal', '-shm']) {
     try {

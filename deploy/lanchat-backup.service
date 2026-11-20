@@ -1,0 +1,8 @@
+# systemd 用户服务：定时备份的数据库备份任务（被 lanchat-backup.timer 触发）
+[Unit]
+Description=LanChat 数据库备份
+
+[Service]
+Type=oneshot
+WorkingDirectory=/path/to/lanchat
+ExecStart=/home/lq016/.local/bin/node scripts/backup.cjs

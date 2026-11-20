@@ -1,6 +1,6 @@
-/* 全局样式：仿 QQ NT 桌面端主题 */
+/* 全局样式：桌面端三栏浅色主题 */
 :root {
-  /* QQ 品牌主色 */
+  /* 品牌主色 */
   --brand: #0099ff;
   --brand-deep: #0082e6;
   --brand-soft: #e8f4ff;
@@ -264,11 +264,11 @@ a:focus-visible,
   color: var(--ink-4);
 }
 
-/* ---------- 聊天主界面（仿 QQ NT 三栏布局） ---------- */
+/* ---------- 聊天主界面（三栏布局） ---------- */
 .chat-page { display: flex; height: 100%; background: var(--bg); }
 
 /* 最左侧窄导航栏 */
-.qq-rail {
+.nav-rail {
   width: 62px;
   flex-shrink: 0;
   background: var(--rail-bg);
@@ -694,7 +694,7 @@ a:focus-visible,
   to { opacity: 1; transform: none; }
 }
 .bubble:hover { box-shadow: var(--sh-2); }
-/* 自己的消息：QQ NT 经典亮蓝气泡 */
+/* 自己的消息：亮蓝气泡 */
 .msg-row.mine .bubble {
   border-radius: 10px;
   border-color: transparent;
@@ -769,7 +769,7 @@ a:focus-visible,
 .media-dl { color: var(--brand-deep); cursor: pointer; }
 .media-dl:hover { text-decoration: underline; }
 
-/* ---------- 输入区（QQ 经典上下结构） ---------- */
+/* ---------- 输入区（上下结构） ---------- */
 .input-area {
   position: relative;
   background: var(--surface);
@@ -1182,7 +1182,7 @@ a:focus-visible,
 .ttl-saved { font-size: 12px; color: #22b573; font-weight: 500; }
 
 @media (max-width: 720px) {
-  .qq-rail { width: 52px; padding: 12px 0; }
+  .nav-rail { width: 52px; padding: 12px 0; }
   .rail-avatar { width: 34px; height: 34px; font-size: 13px; }
   .rail-btn { width: 36px; height: 36px; }
   .msg-body { max-width: 82%; }

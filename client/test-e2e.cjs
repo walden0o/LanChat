@@ -4,7 +4,7 @@
  * 用法：node test-e2e.cjs   （默认打 localhost:1111）
  *
  * ⚠️ 测试会污染数据库（残留测试账号/消息）。推荐打独立测试实例：
- *   DATA_DIR=/tmp/local-qq-test PORT=3111 node server/index.js &
+ *   DATA_DIR=/tmp/lanchat-test PORT=3111 node server/index.js &
  *   BASE=http://localhost:3111 node client/test-e2e.cjs
  */
 const { io } = require('socket.io-client');

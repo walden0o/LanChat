@@ -71,7 +71,7 @@ npm --prefix client run dev
 
 ## 开机自启动（systemd 用户服务，无需 root）
 
-本仓库提供单元模板 `deploy/local-qq.service`：
+本仓库提供单元模板 `deploy/lanchat.service`：
 
 ```bash
 # 1. 允许用户服务在未登录时运行（本机已开启）
@@ -79,22 +79,22 @@ loginctl enable-linger
 
 # 2. 复制并修改模板（WorkingDirectory、node 路径、JWT_SECRET）
 mkdir -p ~/.config/systemd/user
-cp deploy/local-qq.service ~/.config/systemd/user/
-# 编辑 ~/.config/systemd/user/local-qq.service，替换 CHANGE_ME 等占位
+cp deploy/lanchat.service ~/.config/systemd/user/
+# 编辑 ~/.config/systemd/user/lanchat.service，替换 CHANGE_ME 等占位
 
 # 3. 启用并启动
 systemctl --user daemon-reload
-systemctl --user enable --now local-qq
+systemctl --user enable --now lanchat
 
 # 常用运维命令
-systemctl --user status local-qq    # 查看状态
-systemctl --user restart local-qq   # 重启
-journalctl --user -u local-qq -f    # 查看日志
+systemctl --user status lanchat    # 查看状态
+systemctl --user restart lanchat   # 重启
+journalctl --user -u lanchat -f    # 查看日志
 ```
 
 ## 数据存放
 
-- `data/local-qq.db` — SQLite 数据库（用户、消息、文件元数据）
+- `data/lanchat.db` — SQLite 数据库（用户、消息、文件元数据）
 - `uploads/` — 上传的文件实体
 
 删除这两个目录即可完全重置（用户需重新注册，首个注册用户重新成为管理员）。
@@ -105,7 +105,7 @@ journalctl --user -u local-qq -f    # 查看日志
 npm run backup
 ```
 
-用 `VACUUM INTO` 生成一致性快照到 `backups/`（WAL 模式下直接 cp 数据库文件不安全），自动保留最近 20 份。恢复：停服务 → 用备份文件替换 `data/local-qq.db` → 重启。
+用 `VACUUM INTO` 生成一致性快照到 `backups/`（WAL 模式下直接 cp 数据库文件不安全），自动保留最近 20 份。恢复：停服务 → 用备份文件替换 `data/lanchat.db` → 重启。
 
 注意：备份只含数据库，**`uploads/` 目录里的文件实体需另行备份**。
 
@@ -113,14 +113,14 @@ npm run backup
 
 ```bash
 systemctl --user list-timers                     # 查看下次执行时间
-systemctl --user start local-qq-backup.service   # 手动触发一次
-journalctl --user -u local-qq-backup.service     # 看备份日志
+systemctl --user start lanchat-backup.service   # 手动触发一次
+journalctl --user -u lanchat-backup.service     # 看备份日志
 ```
 
-重新部署到其他机器时，复制 `deploy/local-qq-backup.service` 和
-`deploy/local-qq-backup.timer` 到 `~/.config/systemd/user/`（改模板中的
+重新部署到其他机器时，复制 `deploy/lanchat-backup.service` 和
+`deploy/lanchat-backup.timer` 到 `~/.config/systemd/user/`（改模板中的
 `WorkingDirectory`、node 路径），然后 `systemctl --user daemon-reload &&
-systemctl --user enable --now local-qq-backup.timer`。
+systemctl --user enable --now lanchat-backup.timer`。
 
 ## 目录结构
 
@@ -152,9 +152,9 @@ cd client && node test-e2e.cjs
 ⚠️ 测试会污染真实数据库（残留测试账号/消息）。推荐起一个独立测试实例：
 
 ```bash
-DATA_DIR=/tmp/local-qq-test PORT=3111 node server/index.js &
+DATA_DIR=/tmp/lanchat-test PORT=3111 node server/index.js &
 BASE=http://localhost:3111 node client/test-e2e.cjs
-# 测完清理：kill %1 && rm -rf /tmp/local-qq-test
+# 测完清理：kill %1 && rm -rf /tmp/lanchat-test
 ```
 
 新功能验证（撤回/已读回执/搜索/存储统计）：

@@ -1,7 +1,7 @@
 # systemd 用户定时器：每天 09:00 执行一次备份
 # Persistent=true：若当时机器关机/服务未运行，恢复后补跑一次
 [Unit]
-Description=每天 9:00 备份 Local QQ 数据库
+Description=每天 9:00 备份 LanChat 数据库
 
 [Timer]
 OnCalendar=*-*-* 09:00:00

@@ -12,7 +12,7 @@ fs.mkdirSync(DATA_DIR, { recursive: true });
 /** 数据保留天数：默认取环境变量，管理员可在运行时通过 settings 表覆盖。 */
 const DEFAULT_TTL_DAYS = Math.max(1, parseInt(process.env.DATA_TTL_DAYS || '5', 10) || 5);
 
-const db = new Database(path.join(DATA_DIR, 'local-qq.db'));
+const db = new Database(path.join(DATA_DIR, 'lanchat.db'));
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 

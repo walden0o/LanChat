@@ -1,5 +1,5 @@
 <template>
-  <nav class="qq-rail" aria-label="主导航">
+  <nav class="nav-rail" aria-label="主导航">
     <div class="rail-me" :title="`${state.user.nickname}（${state.connected ? '在线' : '连接中'}）`">
       <div class="rail-avatar" :style="{ background: avatarColor(state.user.id) }">
         {{ avatarChar }}

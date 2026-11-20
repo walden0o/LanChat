@@ -1,12 +1,12 @@
 # systemd 用户服务模板 —— 复制到 ~/.config/systemd/user/ 后按需修改
 # 注意：JWT_SECRET 请用 openssl rand -hex 32 生成的随机值替换
 [Unit]
-Description=Local QQ 局域网即时通讯服务
+Description=LanChat 局域网即时通讯服务
 After=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=/path/to/local-qq
+WorkingDirectory=/path/to/lanchat
 ExecStart=/home/lq016/.local/bin/node server/index.js
 Restart=on-failure
 RestartSec=3

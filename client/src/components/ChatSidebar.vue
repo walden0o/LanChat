@@ -1,6 +1,6 @@
 <template>
   <aside class="sidebar" :class="{ open }">
-    <!-- 顶部搜索栏（QQ NT 浅色极简风） -->
+    <!-- 顶部搜索栏 -->
     <div class="side-head">
       <div class="side-search-wrap">
         <svg class="side-search-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">

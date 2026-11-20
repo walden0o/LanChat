@@ -2,7 +2,7 @@
   <div class="chat-page">
     <div v-if="sideOpen" class="side-scrim" @click="sideOpen = false"></div>
 
-    <!-- 最左侧：QQ 窄导航栏 -->
+    <!-- 最左侧：窄导航栏 -->
     <NavRail
       v-model:nav-tab="navTab"
       @open-admin="showAdmin = true"
@@ -256,7 +256,7 @@
           >{{ e }}</button>
         </div>
 
-        <!-- QQ 经典输入区：上方工具栏 + 中间输入 + 右下角发送按钮 -->
+        <!-- 输入区：上方工具栏 + 中间输入 + 右下角发送按钮 -->
         <div class="composer-bar">
           <button class="icon-btn" title="表情" @click="showEmoji = !showEmoji">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
